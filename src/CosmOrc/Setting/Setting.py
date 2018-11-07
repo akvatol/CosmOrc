@@ -234,7 +234,17 @@ class Setting:
 
     def __ifloordiv__(self, other):
         # TODO create idiv
-        pass
+        if isinstance(other, Setting):
+            self.name += ' // ' + other.name
+            self.value //= other.value,
+            self.unit += ' // ' + other.unit
+            return self
+        elif isinstance(other, (int, float)):
+            self.value // other
+            return self
+        else:
+            print(f'other : {other}\n other.type : {type(other)}')
+            raise ValueError('Arguments must be Setting or number')
 
     def __pow__(self, other):
         # Power (x**y)
@@ -292,7 +302,7 @@ class Setting:
 def main():
     a = Setting.from_list(('T', 123, 'K'))
     b = Setting.from_record('T 25 K')
-    print(a // b)
+    print(a//b)
 
 
 if __name__ == '__main__':
