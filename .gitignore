@@ -1,1 +1,9 @@
 .vscode/settings.json
+.coverage
+test/__pycache__/
+src/CosmOrc/Setting/__pycache__/
+nosetests.xml
+.noseids
+src/CosmOrc/Setting/__pycache__/Setting.cpython-36.pyc
+src/CosmOrc/Setting/__pycache__/Setting.cpython-36.pyc
+.vscode/launch.json
