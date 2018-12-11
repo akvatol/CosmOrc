@@ -1,8 +1,8 @@
-import sys
 import unittest
 import random
-sys.path.insert(0, 'src/CosmOrc/Setting')
-from Setting import Setting
+import sys
+sys.path.insert(0, 'src/CosmOrc/basic')
+from setting import Setting
 
 letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
