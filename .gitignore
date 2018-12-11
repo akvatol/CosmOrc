@@ -1,9 +1,9 @@
 .vscode/settings.json
+.venv
+.vscode
+*.pyc
 .coverage
-test/__pycache__/
-src/CosmOrc/Setting/__pycache__/
-nosetests.xml
+*xml
 .noseids
-src/CosmOrc/Setting/__pycache__/Setting.cpython-36.pyc
-src/CosmOrc/Setting/__pycache__/Setting.cpython-36.pyc
-.vscode/launch.json
+*.json
+src/CosmOrc/parser/cospar_old.py

@@ -75,8 +75,9 @@ class Setting:
             print(e)
             raise ValueError(f"Python could not convert {value} to float")
 
-        self.unit = unit
-        if not unit:
+        if unit:
+            self.unit = str(unit)
+        else:
             self.unit = ''
 
     @classmethod
@@ -138,11 +139,9 @@ class Setting:
         --------
         >>> a = Setting(name='Energy', value=1000, unit='J')
         >>> a.convert(koef=10**(-3), unit='kJ')
-        >>> print(a)
         Energy 1.0 kJ
 
         >>> a.convert(name='NotEnergy', value=123, unit='NotJ')
-        >>> print(a)
         NotEnergy 123.0 NotJ
         """
         # TODO написать isinstance for value and koef
@@ -161,6 +160,7 @@ class Setting:
             self.value = float(value)
         if unit:
             self.unit = str(unit)
+        return self
 
     def __repr__(self):
         return '{} {} {}'.format(self.name, self.value, self.unit)
@@ -476,32 +476,11 @@ class Setting:
             raise TypeError("Only numbers and Settings can use in math")
 
 
-def _profile_func(func):
-    import cProfile
-    import time
-    cp = cProfile.Profile()
-    cp.enable()
-    start_time = time.time()
-
-    func()
-
-    cp.disable()
-    cp.print_stats()
-    print("--- %s seconds ---" % (time.time() - start_time))
-
-
 def main():
-    import pandas as pd
-    a = Setting.from_record('T 5 kcal')
-    b = Setting.from_record('S 6 kcal')
-    c = pd.Series(data=(a, b))
-
-    c.apply(lambda x: x.convert(koef=foo, unit='J'))
-    print(c)
+    pass
 
 
 if __name__ == '__main__':
     import doctest
     print(doctest.testmod())
     main()
-    # _profile_func(main)
