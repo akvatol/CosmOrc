@@ -1,17 +1,19 @@
-
-#%%
 import os
 import re
 import pandas as pd
+import sys
+sys.path.insert(0, 'src/CosmOrc/basic')
+from setting import Setting
 
-parameter_list = ('Zero-point correction',
+
+parameter_list = ['Zero-point correction',
                   'Thermal correction to Energy',
                   'Thermal correction to Enthalpy',
                   'Thermal correction to Gibbs Free Energy',
                   'Sum of electronic and zero-point Energies',
                   'Sum of electronic and thermal Energies',
                   'Sum of electronic and thermal Enthalpies',
-                  'Sum of electronic and thermal Free Energies')
+                  'Sum of electronic and thermal Free Energies']
 
 properties_list = ['Total',
                    'Electronic',
@@ -19,86 +21,146 @@ properties_list = ['Total',
                    'Rotational',
                    'Vibrational']
 
-Freaks_global = []
-Freaks_current = []
-Total_E, Electronic_E, Translational_E, Rotational_E, Vibrational_E = [],[],[],[],[]
-Total_S, Electronic_S, Translational_S, Rotational_S, Vibrational_S = [],[],[],[],[]
-D_freaks_rev_sm = {}
 
-file_vec = []
-file_vec_new = []
-for root, dirs, files in os.walk(os.getcwd()):
-    for file in files:
-        if file.endswith(".log"):
-            current_way = os.path.join(root, file)
-            file_vec.append(current_way)
-print (file_vec, sep = '\n')
+def list_unapck(some_list: list or tuple):
+    """Функция для распаковки списков. Распаковывает вложенные
+    списки на один уровень.
 
+    Arguments
+    ---------
+    some_list: list or tuple
+        Список содержащий вложенные списки
 
-D_main = {properties:[] for properties in parameter_list}
-    
-for file in file_vec:
-    file_name = str(file)
-    with open(file_name, "r") as f:
-        #print (f.readlines().index(' - Thermochemistry -\n'))
-        lines_vector = f.readlines()
-        if " - Thermochemistry -\n" in lines_vector:
-            file_vec_new.append(file_name)
-            for line in lines_vector:
-                Armageddez = re.search ('(\w+)\s\-\-\s*([-\d.]+)\s*([-\d.]+)\s*([-\d.]+)', line)
-                if Armageddez:
-                    if (Armageddez.group(1)) == 'Frequencies':
-                        #print (Armageddez.group(2), Armageddez.group(3), Armageddez.group(4))
-                        for i in range (2,5):
-                            Freaks_current.append(Armageddez.group(i))
-                        
-                for i in parameter_list:
-                    Nechto = re.search ('(-?[0-9]{1,4}\.[0-9]{6})', line)
-                    if Nechto:
-                        if i in line:
-                            D_main[i].append(Nechto.group(1))
-                            #print (D_main)
-                for k in properties_list:
-                    Nerd = re.search('([0-9]{1,4}\.[0-9]{3})\s{2,15}([0-9]{1,4}\.[0-9]{3})\s{2,15}([0-9]{1,4}\.[0-9]{3})', line)
-                    if Nerd:
-                        if k in line:
-                            current_E_Thermal = k + '_E'
-                            current_S = k + '_S'
-                            globals()[current_E_Thermal].append(line.split()[1])
-                            globals()[current_S].append(line.split()[3])
-    Freaks_global.append(Freaks_current)
-    Freaks_current = []
-#print(Freaks_global)
-print (file_vec_new)
-
- 
+    Return
+    ------
+    new_list: list
+        Список, распкованный на один уровень
+    """
+    new_list = []
+    for element in some_list:
+        if isinstance(element, (list, tuple)):
+            for i in element:
+                new_list.append(i)
+        else:
+            new_list.append(element)
+    return new_list
 
 
-#%%
-D_properties = {'Total_E':Total_E, 'Electronic_E':Electronic_E, 'Translational_E':Translational_E, 'Rotational_E': Rotational_E, 'Vibrational_E':Vibrational_E,
-               'Total_S':Total_S, 'Electronic_S':Electronic_S, 'Translational_S':Translational_S, 'Rotational_S': Rotational_S, 'Vibrational_S':Vibrational_S}
-table_Gaus_properties = pd.DataFrame(D_properties)
-table_Gaus_properties.index = file_vec_new
-print (table_Gaus_properties)
+def read_data_gaussian(file_path: str):
+    """Функция для чтения данных из Gaussian. Проверяет есть ли
+    термохимические данные в файле, и считывает нужные строки 
+
+    Arguments
+    ---------
+    file_path: str
+        Путь к *.out файлу Gaussian
+
+    Return
+    ------
+    matching: tuple
+        Кортеж в который входят все строки содержащие в себе
+        элементы списков parameter_list или properties_list
+    """
+    matching = []
+    with open(file_path, 'r') as data_file:
+        for line in data_file:
+            if any(xs in line for xs in (parameter_list + properties_list)):
+                matching.append(line)
+    return tuple(matching)
 
 
-#%%
-table_Gaus_main = pd.DataFrame(D_main)
-table_Gaus_main.index = file_vec_new
+def freq_pars(some_str: str):
+    """Функция для парсинга частот
+
+    Arguments
+    ---------
+    some_string: str
+        Строка содержащая в себе значение частоты
+
+    Return
+    ------
+        Возвращает список содержащий в себе объекты класса Setting,
+        с значениями частот в cm**-1.
+    """
+    _current_freq_ = []
+    _name_ = r'(\w+)'
+    _freq_value_ = r'([-\d.]+)'
+    freq_str = re.search(_name_ + r'\s\-\-\s*' + _freq_value_ + r'\s*'
+                         + _freq_value_ + r'\s*' + _freq_value_, some_str)
+    if freq_str:
+        for i in range(2, 5):
+            _current_freq_.append(Setting(name='freq.',
+                                          value=freq_str.group(i),
+                                          unit='cm**-1'))
+    return _current_freq_
 
 
-#%%
-D_freaks_rev_sm = dict(zip(file_vec,Freaks_global))
-print (D_freaks_rev_sm)
+def parameter_pars(some_str: str):
+    """Функция для парсинга термодинамических параметров, должна
+    принимать строки содержащие в себе один элемент из списка
+    parameter_list
+
+    Arguments
+    ---------
+    some_str: str
+        Строка для парсинга
+
+    Return
+    ------
+    Возвращает объект класса Setting, содержащий в себе термодинамические
+    парамаетры в J/mol
+    """
+    # searching with regexp, does not need here
+    # _value_ = '(-?[0-9]{1,10}\.[0-9]{6})'
+    # param_str = re.search(_value_, some_str)
+    _ = some_str.split('=')
+    return Setting(name=_[0],
+                   value=_[1],
+                   unit='Eh').convert(koef=2625500, unit='J/mol')
 
 
-#%%
-table_Gaus_global = pd.concat([table_Gaus_main, table_Gaus_properties], axis = 1)
-table_Gaus_global.to_csv('Gaussian_Vica.csv', sep='\t')
-print (table_Gaus_global)
+def properties_pars(some_str: str):
+    """Функция для прасинга энтропии, принимает строку содежащую
+    одно из слов списка properties_list, возращает объект класса Setting
+    в J/mol*K
+
+    Arguments
+    ---------
+    some_str: str
 
 
-#%%
+    Return
+    ------
+
+    """
+    _value_ = r'([0-9]{1,10}\.[0-9]{3})'
+    _whitespace_ = r'\s{2,15}'
+    entropy_str = re.search(_value_ + _whitespace_ + _value_
+                            + _whitespace_ + _value_, some_str)
+    if entropy_str:
+        return Setting(name='Entropy',
+                       value=entropy_str.group(3),
+                       unit='Cal/mol*K').convert(koef=4.184, unit='J/mol*K')
+
+def file_pars(file_path: str):
+    data = read_data_gaussian(file_path)
+    _all_setting = []
+    if data:
+        for line in data:
+            if 'Frequencies' in line:
+                _all_setting.append(freq_pars(line))
+            elif any(xs in line for xs in parameter_list):
+                _all_setting.append(parameter_pars(line))
+            elif any(xs in line for xs in properties_list):
+                _all_setting.append(properties_pars(line))
+            else:
+                pass
+    return pd.Series(list_unapck(_all_setting)).dropna()
 
 
+def main():
+    print(file_pars('/home/antondomnin/theochem-4/lab/Adonin/Gaussian/BiBr6/BiBr6LC-wPBE/BiBr6.log'))
 
+
+if __name__ == '__main__':
+    main()
