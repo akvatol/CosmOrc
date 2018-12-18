@@ -11,7 +11,7 @@ def chunkit(data: list or tuple, n=None):
 
     Returns
     -------
-        list: разделенный на части список
+    list: разделенный на части список
 
     Example
     -------

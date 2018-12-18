@@ -7,9 +7,7 @@ __email__ = 'a.v.daomnin@gmail.com, yaroslavsolovev78@gmail.com'
 
 import pandas as pd
 import re
-import sys
-sys.path.insert(0, 'src/CosmOrc/basic')
-from setting import Setting
+from src.CosmOrc.basic.setting import Setting
 
 parameter_list = ('Electronic energy',
                   'Zero point energy',
@@ -37,14 +35,14 @@ def read_data_orca(file_path=None):
 
     Arguments
     ---------
-        file_path: str
+    file_path: str
         Путь к файлу для парсинга
 
     Return
     ------
-        matching: list
-            Список со строками, в которые входят строки из
-            списка parameter_list
+    matching: list
+        Список со строками, в которые входят строки из
+        списка parameter_list
     """
     matching = []
     with open(file_path, "r") as data_file:
@@ -55,7 +53,7 @@ def read_data_orca(file_path=None):
         return matching
 
 
-def tsrot_parsing(some_string: str):
+def tsrot_pars(some_string: str):
     """Функция необходима для парсинга строк в которые входит TSrot
     (вращательная энтропия умноженная на температуру), на вход
     принимает строку в которой параметры указаны в kcal/mol,
@@ -63,18 +61,18 @@ def tsrot_parsing(some_string: str):
 
     Arguments
     ---------
-        some_string: str
-            Строка содержащая в себе значение вращательной энтропии 
+    some_string: str
+        Строка содержащая в себе значение вращательной энтропии 
 
     Return
     ------
         Возвращает объект класса Setting, содержащий в себе
         значения TSrot в J/mol.
     """
-    _sn_coef_ = 'sn=\s?([\d.]+)'
-    _some_info_ = '[\s]+qrot.sn=[\s]+[-\d.]+\s'
-    _TSrot_segment_ = 'T\*S\(rot\)=[\s]+'
-    _value_ = '([-\d.]+)[\s]+kcal\/mol'
+    _sn_coef_ = r'sn=\s?([\d.]+)'
+    _some_info_ = r'[\s]+qrot.sn=[\s]+[-\d.]+\s'
+    _TSrot_segment_ = r'T\*S\(rot\)=[\s]+'
+    _value_ = r'([-\d.]+)[\s]+kcal\/mol'
     _reg = re.search(_sn_coef_ + _some_info_ +
                      _TSrot_segment_ + _value_,
                      some_string)
@@ -87,30 +85,30 @@ def tsrot_parsing(some_string: str):
                        unit=_unit).convert(koef=4182, unit='J/mol')
 
 
-def tp_parser(some_string: str):
+def tp_pars(some_string: str):
     """Функция для парсинга строк содержащих значения температуры и давления
 
     Arguments
     ---------
-        some_string: str
-            Строка содержащая в себе значение параметра
-            (температура или давление)
+    some_string: str
+        Строка содержащая в себе значение параметра
+        (температура или давление)
 
     Return
     ------
         Возвращает объект класса Setting, содержащий в себе
         значения параметра в J/mol.
     """
-    _name_ = '([\w\s]+\w+)'
-    _dots_ = '\s*\.\.\.\s*'
-    _value_ = '([-\d.]+)'
-    _unit_ = '\s*.*\s([\w])'
+    _name_ = r'([\w\s]+)'
+    _dots_ = r'\s*\.\.\.\s*'
+    _value_ = r'([\d]+.[\d]+)'
+    _unit_ = r'\s*(\w+)'
 
     _reg = re.search(_name_ + _dots_ +
                      _value_ + _unit_,
                      some_string)
     if _reg:
-        return Setting(name=_reg.group(1),
+        return Setting(name=_reg.group(1).split()[0],
                        value=_reg.group(2),
                        unit=_reg.group(3))
 
@@ -121,17 +119,17 @@ def other_param_pars(some_string: str):
 
     Arguments
     ---------
-        some_string: str
-            Строка содержащая в себе значения вращательной энтропии 
+    some_string: str
+        Строка содержащая в себе значения вращательной энтропии
 
     Return
     ------
         Возвращает объект класса Setting, содержащий в себе
         значения параметра в J/mol.
     """
-    _name_ = '([\w\s]+\w+)'
-    _dots_ = '\s*\.\.\.\s*'
-    _value_ = '([-\d.]+)\s*.*'
+    _name_ = r'([\w\s]+\w+)'
+    _dots_ = r'\s*\.\.\.\s*'
+    _value_ = r'([-\d.]+)\s*.*'
     _reg = re.search(_name_ + _dots_ + _value_, some_string)
 
     if _reg:
@@ -140,22 +138,22 @@ def other_param_pars(some_string: str):
                        unit='Eh').convert(koef=2625500, unit='J/mol')
 
 
-def freak(some_str: str):
-    """Функция для парсинга частот
+def freq_pars(some_str: str):
+    """Функция для парсинга строк содержащих значения частот
 
     Arguments
     ---------
-        some_string: str
-            Строка содержащая в себе значение частоты
+    some_string: str
+        Строка содержащая в себе значение частоты
 
     Return
     ------
         Возвращает объект класса Setting, содержащий в себе
         значения параметра в cm**-1.
     """
-    _freq_number_ = '([\d]+):\s+'
-    _value_ = '([-\d.]+)'
-    _unit_ = '\s(cm\**-1)'
+    _freq_number_ = r'([\d]+):\s+'
+    _value_ = r'([-\d.]+)'
+    _unit_ = r'\s(cm\**-1)'
     _reg = re.search(_freq_number_ + _value_ + _unit_, some_str)
 
     if _reg:
@@ -172,8 +170,8 @@ def pars_all_matches(data: list or tuple):
 
     Arguments
     ---------
-        data: list or tuple
-            Список, возвращаемый функцией read_data_orca
+    data: list or tuple
+        Список, возвращаемый функцией read_data_orca
 
     Return
     ------
@@ -184,27 +182,23 @@ def pars_all_matches(data: list or tuple):
     if data:
         for string in reversed(data):
             if 'sn=' in string:
-                _all_settings.append(tsrot_parsing(string))
+                _all_settings.append(tsrot_pars(string))
             elif 'Temperature' in string:
-                _all_settings.append(tp_parser(string))
+                _all_settings.append(tp_pars(string))
             elif 'Pressure' in string:
-                _all_settings.append(tp_parser(string))
+                _all_settings.append(tp_pars(string))
             elif 'Total Mass' in string:
-                _all_settings.append(tp_parser(string))
+                _all_settings.append(tp_pars(string))
             elif 'cm**-1' in string:
-                _all_settings.append(freak(string))
+                _all_settings.append(freq_pars(string))
             else:
                 _all_settings.append(other_param_pars(string))
     return pd.Series(data=_all_settings).dropna()
 
 
 def main():
-    data = read_data_orca(
-        file_path='/home/antondomnin/theochem-4/lab/ORCA/BiBr6OTPSS/BiBr60.out')
-    if data:
-        print(pars_all_matches(data))
-    else:
-        pass
+    pass
+
 
 if __name__ == '__main__':
     main()

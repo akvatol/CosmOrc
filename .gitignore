@@ -7,3 +7,4 @@
 .noseids
 *.json
 src/CosmOrc/parser/cospar_old.py
+*.csv
