@@ -34,6 +34,21 @@ def chunkit(data: list or tuple, n=None):
     return new_data
 
 
+def read_data_cosmo(file_path: str):
+    with open(file_path, 'r') as file:
+        data = []
+        for line in file:
+            if line.split():
+                if 'Setting' in line:
+                    jobs_data = []
+                    jobs_data.append(line)
+                    data.append(jobs_data)
+                elif 'job' not in line:
+                    jobs_data.append(line)
+                else:
+                    pass
+    return data
+
 def parser():
     pass
 
