@@ -1,0 +1,25 @@
+,parameters
+43,freq. 77.1886 cm**-1
+44,freq. 78.3453 cm**-1
+45,freq. 95.1516 cm**-1
+46,freq. 117.7066 cm**-1
+47,freq. 123.2362 cm**-1
+48,freq. 238.4275 cm**-1
+49,freq. 252.9847 cm**-1
+50,freq. 267.8975 cm**-1
+51,freq. 270.7431 cm**-1
+52,Temperature 298.15 Kelvin
+53,Pressure 1.0 Atm
+58,Zero-point correction 9102.392980879 J/mol
+59,Thermal correction to Energy 31234.833946788996 J/mol
+60,Thermal correction to Enthalpy 33713.247264917 J/mol
+61,Thermal correction to Gibbs Free Energy -89065.353182388 J/mol
+62,Sum of electronic and zero-point Energies -8794730522.862587 J/mol
+63,Sum of electronic and thermal Energies -8794708390.421621 J/mol
+64,Sum of electronic and thermal Enthalpies -8794705912.008303 J/mol
+65,Sum of electronic and thermal Free Energies -8794828690.60875 J/mol
+66,Total Entropy 411.8102 J/mol*K
+67,Electronic Entropy 9.133671999999999 J/mol*K
+68,Translational Entropy 174.686184 J/mol*K
+69,Rotational Entropy 126.080656 J/mol*K
+70,Vibrational Entropy 101.90550400000001 J/mol*K

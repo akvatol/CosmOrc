@@ -1,8 +1,7 @@
 import unittest
 import random
 import sys
-sys.path.insert(0, 'src/CosmOrc/basic')
-from setting import Setting
+from src.CosmOrc.basic.setting import Setting
 
 letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
 
@@ -123,7 +122,8 @@ class TestSetting(unittest.TestCase):
                         in str(context.exception))
 
     def test_convert(self):
-        # TODO Написать документацию и доделать
+        """Проверяет правильность работы метода convert
+        """
         self.C.convert(name='TT')
         self.assertAlmostEqual(self.C,
                                Setting(name='TT', value=100, unit='J'),
