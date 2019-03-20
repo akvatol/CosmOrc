@@ -1,6 +1,6 @@
 import argparse as ag
 import re
-import os 
+import os
 import pandas as pd
 from src.CosmOrc.basic.setting import Setting
 
@@ -64,13 +64,24 @@ def read_data_gaussian(file_path: str):
     with open(file_path, 'r') as data_file:
         for line in data_file:
             if any(xs in line for xs in (parameter_list +
-                   properties_list + ['Frequencies', 'Temperature'])):
+                   properties_list + ['Frequencies', 'Temperature', + 'Molecular mass'])):
                 matching.append(line)
     return tuple(matching)
 
 
 # TODO Сделать парсер для давлений и температуры
 # (Temperature)\s*([0-9.]+)\s*([\w]+).\s*(Pressure)\s*([0-9.]+)\s*([\w]+).
+
+def molecular_mass_pars(some_str):
+    """Парсер молеколуярной массы
+    """
+    _mol_mass = r'Molecular mass:\s*([0-9.]+)\s*([\w]+).'
+    _mol_mass_string = re.search(_mol_mass, some_str)
+    if _mol_mass_string:
+        return Setting(name='Molecular mass',
+                       value=_mol_mass_string.group(1),
+                       unit=_mol_mass_string.group(2))
+
 
 def tp_pars(some_str: str):
     """Функция для парсинга температуры и давленя в *.out файле
@@ -178,10 +189,10 @@ def file_pars(file_path: str):
     # TODO Дописать документацию
     """
     """
-    data = read_data_gaussian(file_path)
+    read_data = read_data_gaussian(file_path)
     _all_setting = []
-    if data:
-        for line in data:
+    if read_data:
+        for line in read_data:
             if 'Frequencies' in line:
                 _all_setting.append(freq_pars(line))
             elif any(xs in line for xs in parameter_list):
@@ -190,14 +201,29 @@ def file_pars(file_path: str):
                 _all_setting.append(properties_pars(line))
             elif 'Temperature' in line:
                 _all_setting.append(tp_pars(line))
+            elif 'Molecular mass' in line:
+                _all_setting.append(molecular_mass_pars(line))
             else:
                 pass
-    return pd.Series(data=list_unapck(_all_setting),name='parameters').dropna()
+
+    raw_data = list_unapck(_all_setting)
+    data = [parameter for parameter in raw_data if parameter is not None]
+    if data:
+        indexes = [parameter.name for parameter in data]
+        return pd.Series(data=data, name='parameters', index=indexes)
 
 
 def main():
+    # path_to_test_files = 'test/data/test_gauspar'
+    # raw_files = path_to_test_files + '/csv_files'
+    # out_files = path_to_test_files + '/out_files'
+    # for i in range(1, 5+1):
+    #     f1 = f'{out_files}/file{i}.out'
+    #     f2 = f'{raw_files}/file{i}.csv'
+    #     if file_pars(f1):
+    #         print(file_pars(f1))
+    #         #file_pars(f1).to_csv(path_or_buf=f2)
     pass
-
 
 if __name__ == '__main__':
     main()
