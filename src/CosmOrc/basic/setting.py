@@ -1,9 +1,10 @@
-__author__ = 'Anton Domnin'
-__license__ = 'GPL3'
-__maintainer__ = 'Anton Domnin'
-__email__ = 'a.v.daomnin@gmail.com'
+# __author__ = 'Anton Domnin'
+# __license__ = 'GPL3'
+# __maintainer__ = 'Anton Domnin'
+# __email__ = 'a.v.daomnin@gmail.com'
 
-# %%
+import numpy as np
+import pandas as pd
 
 
 class Setting:
@@ -49,20 +50,6 @@ class Setting:
     >>> a = Setting.from_record('T 274 K')
     >>> b = Setting.from_list(['T', 123, 'K'])
     >>> c = Setting(name='G', value=115)
-    >>> print(a)
-    T 274.0 K
-    >>> print(b)
-    T 123.0 K
-    >>> print(c)
-    G 115.0 
-    >>> print(a + b)
-    T 397.0 K
-    >>> print(a - b)
-    T 151.0 K
-    >>> print(a*b)
-    T*T 33702.0 K*K
-    >>> print(a/c)
-    T/G 2.382608695652174 K/
     '''
     __slots__ = ('name', 'value', 'unit', 'spec_name')
 
@@ -86,13 +73,10 @@ class Setting:
         if isinstance(data, (list, tuple)):
 
             if len(data) == 3:
-                return cls(name=data[0],
-                           value=data[1],
-                           unit=data[2])
+                return cls(name=data[0], value=data[1], unit=data[2])
 
             elif len(data) == 2:
-                return cls(name=data[0],
-                           value=data[1])
+                return cls(name=data[0], value=data[1])
 
             else:
                 raise ValueError("Must have 3 or 2 arguments")
@@ -111,6 +95,7 @@ class Setting:
             raise TypeError("from_record() method must get string")
 
     def convert(self, name=None, koef=None, value=None, unit=None):
+        # TODO дописать документацию
         """
         Функция нужна для конвертации одних единиц измерения в другие,
         с её помощью можно изменить не только значения объекта Setting,
@@ -163,7 +148,7 @@ class Setting:
         return self
 
     def __repr__(self):
-        return '{} {} {}'.format(self.name, self.value, self.unit)
+        return self.__str__()
 
     def __str__(self):
         return '{} {} {}'.format(self.name, self.value, self.unit)
@@ -175,19 +160,24 @@ class Setting:
         return self
 
     def __add__(self, other):
-        # Addition
+        """
+        Addition
+        """
         if isinstance(other, Setting):
             if other.unit == self.unit:
-                return Setting(name=self.name,
-                               value=self.value + other.value,
-                               unit=self.unit)
+                return Setting(
+                    name=self.name,
+                    value=self.value + other.value,
+                    unit=self.unit)
             else:
                 raise ValueError("For + - both settings must have same units")
 
+        elif isinstance(other, (np.ndarray, pd.Series, pd.DataFrame)):
+            return (other.__radd__(self))
+
         elif isinstance(other, (float, int)):
-            return Setting(name=self.name,
-                           value=self.value + other,
-                           unit=self.unit)
+            return Setting(
+                name=self.name, value=self.value + other, unit=self.unit)
 
         else:
             raise TypeError("Only numbers and Settings can use in math")
@@ -214,16 +204,16 @@ class Setting:
         # Right addition (3 + T)
         if isinstance(other, Setting):
             if other.unit == self.unit:
-                return Setting(name=self.name,
-                               value=self.value + other.value,
-                               unit=self.unit)
+                return Setting(
+                    name=self.name,
+                    value=self.value + other.value,
+                    unit=self.unit)
             else:
                 raise ValueError("For + - both settings must have same units")
 
         elif isinstance(other, (float, int)):
-            return Setting(name=self.name,
-                           value=self.value + other,
-                           unit=self.unit)
+            return Setting(
+                name=self.name, value=self.value + other, unit=self.unit)
 
         else:
             raise TypeError("Only numbers and Settings can use in math")
@@ -231,15 +221,18 @@ class Setting:
     def __sub__(self, other):
         # Subtraction
         if isinstance(other, (float, int)):
-            return Setting(name=self.name,
-                           value=self.value - other,
-                           unit=self.unit)
+            return Setting(
+                name=self.name, value=self.value - other, unit=self.unit)
+
+        elif isinstance(other, (np.ndarray, pd.Series, pd.DataFrame)):
+            return (other.__rsub__(self))
 
         elif isinstance(other, Setting):
             if other.unit == self.unit:
-                return Setting(name=self.name,
-                               value=self.value - other.value,
-                               unit=self.unit)
+                return Setting(
+                    name=self.name,
+                    value=self.value - other.value,
+                    unit=self.unit)
             else:
                 raise ValueError("For + - both settings must have same units")
         else:
@@ -266,15 +259,15 @@ class Setting:
     def __rsub__(self, other):
         # Right - (3 - T)
         if isinstance(other, (float, int)):
-            return Setting(name=self.name,
-                           value=self.value - other,
-                           unit=self.unit)
+            return Setting(
+                name=self.name, value=other - self.value, unit=self.unit)
 
         elif isinstance(other, Setting):
             if other.unit == self.unit:
-                return Setting(name=self.name,
-                               value=self.value - other.value,
-                               unit=self.unit)
+                return Setting(
+                    name=self.name,
+                    value=other.value - self.value,
+                    unit=self.unit)
             else:
                 raise ValueError("For + - both settings must have same units")
         else:
@@ -283,55 +276,66 @@ class Setting:
     def __mul__(self, other):
         # Multiplication
         if isinstance(other, Setting):
-            return Setting(name=self.name + '*' + other.name,
-                           value=self.value * other.value,
-                           unit=self.unit + '*' + other.unit)
+            return Setting(
+                name=self.name + '*' + other.name,
+                value=self.value * other.value,
+                unit=self.unit + '*' + other.unit)
+
+        elif isinstance(other, (np.ndarray, pd.Series, pd.DataFrame)):
+            return (other.__rmul__(self))
 
         elif isinstance(other, (int, float)):
-            return Setting(name=self.name,
-                           value=self.value * other,
-                           unit=self.unit)
+            return Setting(
+                name=self.name, value=self.value * other, unit=self.unit)
 
         else:
             raise TypeError("Only numbers and Settings can use in math")
 
     def __imul__(self, other):
+        # self *= other
         if isinstance(other, Setting):
             self.name = self.name + '*' + other.name
             self.value = self.value / other.value
             self.unit = self.unit + '*' + other.unit
             return self
+
         elif isinstance(other, (int, float)):
             self.value *= other
             return self
+
         else:
             raise TypeError("Only numbers and Settings can use in math")
 
     def __rmul__(self, other):
         # right multiplication ()
         if isinstance(other, Setting):
-            return Setting(name=self.name + '*' + other.name,
-                           value=self.value * other.value,
-                           unit=self.unit + '*' + other.unit)
+            return Setting(
+                name=self.name + '*' + other.name,
+                value=self.value * other.value,
+                unit=self.unit + '*' + other.unit)
 
         elif isinstance(other, (int, float)):
-            return Setting(name=self.name,
-                           value=self.value * other,
-                           unit=self.unit)
+            return Setting(
+                name=self.name, value=self.value * other, unit=self.unit)
 
         else:
             raise TypeError("Only numbers and Settings can use in math")
 
     def __truediv__(self, other):
-        # Division
+        # Division self / other
         if isinstance(other, Setting):
-            return Setting(name=self.name + '/' + other.name,
-                           value=self.value / other.value,
-                           unit=self.unit + '/' + other.unit)
+            return Setting(
+                name=self.name + '/' + other.name,
+                value=self.value / other.value,
+                unit=self.unit + '/' + other.unit)
+
         elif isinstance(other, (int, float)):
-            return Setting(name=self.name,
-                           value=self.value / other,
-                           unit=self.unit)
+            return Setting(
+                name=self.name, value=self.value / other, unit=self.unit)
+
+        elif isinstance(other, (np.ndarray, pd.Series, pd.DataFrame)):
+            return (other.__rtruediv__(self))
+
         else:
             raise TypeError("Only numbers and Settings can use in math")
 
@@ -342,46 +346,61 @@ class Setting:
             self.value = self.value / other.value
             self.unit = self.unit + '/' + other.unit
             return self
+
         elif isinstance(other, (int, float)):
             self.value /= other
             return self
+
         else:
             raise TypeError("Only numbers and Settings can use in math")
 
     def __rtruediv__(self, other):
-        # Right division (3 / T)
+        # Right division other / self
         if isinstance(other, Setting):
-            return Setting(name=self.name + '/' + other.name,
-                           value=self.value / other.value,
-                           unit=self.unit + '/' + other.unit)
+            return Setting(
+                name=other.name + '/' + self.name,
+                value=other.value / self.value,
+                unit=other.unit + '/' + self.unit)
+
         elif isinstance(other, (int, float)):
-            return Setting(name=self.name,
-                           value=self.value / other,
-                           unit=self.unit)
+            return Setting(
+                name=self.name, value=other / self.value, unit=self.unit)
+
         else:
             raise TypeError("Only numbers and Settings can use in math")
 
     def __pow__(self, other):
         # Power (x**y)
         if isinstance(other, Setting):
-            return Setting(name=self.name + '^' + other.name,
-                           value=self.value ** other.value,
-                           unit=self.unit + '^' + other.unit)
+            return Setting(
+                name=self.name + '^' + other.name,
+                value=self.value**other.value,
+                unit=self.unit + '^' + other.unit)
+
         elif isinstance(other, (int, float)):
-            return Setting(name=self.name,
-                           value=self.value ** other,
-                           unit=self.unit + '*' + str(other.value))
+            return Setting(
+                name=self.name,
+                value=self.value**other,
+                unit=self.unit + '*' + str(other.value))
+
+        # elif isinstance(other, (np.ndarray, pd.Series, pd.DataFrame)):
+        #     return other**self
+
         else:
             raise TypeError("Only numbers and Settings can use in math")
 
     def __rpow__(self, other):
         if isinstance(other, Setting):
-            return Setting(name=self.name + '^' + other.name,
-                           value=self.value ** other.value)
+            return Setting(
+                name=self.name + '^' + other.name,
+                value=self.value**other.value)
+
         elif isinstance(other, (int, float)):
-            return Setting(name=self.name,
-                           value=self.value ** other,
-                           unit=self.unit + '*' + str(other.value))
+            return Setting(
+                name=self.name,
+                value=self.value**other,
+                unit=self.unit + '^' + str(other))
+
         else:
             raise TypeError("Only numbers and Settings can use in math")
 

@@ -1,8 +1,8 @@
-import unittest
+import difflib
 import os
 import random
-import sys
-import difflib
+import unittest
+
 import src.CosmOrc.parsers.gauspar as gauspar
 from src.CosmOrc.basic.setting import Setting
 
@@ -16,6 +16,7 @@ class TestGauspar(unittest.TestCase):
         pass
 
     def test_read_data_gaussian(self):
+        # TODO исправить появление molecular mass pars
         """gauspar.read_data_gaussian test function
         """
         out_files_list = os.listdir(out_files)
@@ -122,7 +123,7 @@ class TestGauspar(unittest.TestCase):
         """
 
         parameters_list = [
-            'Zero-point correction= 0.003467',
+           'Zero-point correction= 0.003467',
             'Thermal correction to Energy= 0.011897',
             'Thermal correction to Enthalpy= 0.012841',
             'Thermal correction to Gibbs Free Energy= -0.033924',
@@ -195,7 +196,7 @@ class TestGauspar(unittest.TestCase):
             self.assertRegex(line, reg, 'regexp does not work')
 
     def test_file_pars(self):
-        # TODO Доделать 
+        # TODO Доделать
         out_files_list = os.listdir(out_files)
         for files in out_files_list:
             pass
