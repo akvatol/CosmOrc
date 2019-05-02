@@ -3,7 +3,7 @@ import pandas as pd
 from src.CosmOrc.basic.setting import Setting
 
 
-def chunkit(data: list or tuple, n=None):
+def chunkit(data: list or tuple = None, n: int = None):
     """
     Функция разбивает исходный массив на N частей (N == n).
 
@@ -21,11 +21,9 @@ def chunkit(data: list or tuple, n=None):
     Example
     -------
     >>> l = [1, 2, 3, 4, 5, 6, 7, 8]
-    >>> a = chunkit(l)
-    >>> print(a)
+    >>> chunkit(l)
     [[1, 2, 3, 4], [5, 6, 7, 8]]
-    >>> b = chunkit(l, n=4)
-    >>> print(b)
+    >>> chunkit(l, n=4)
     [[1, 2], [3, 4], [5, 6], [7, 8]]
     """
     new_data = []
@@ -39,23 +37,40 @@ def chunkit(data: list or tuple, n=None):
     return new_data
 
 
-def read_data_cosmo(file_path: str):
+def read_data_cosmo(file_path: str = None) -> list:
+    """Функция для чтения *.tab файлов CosmoTherm, выбирает строки с
+    параметрами расчета, единицами измерения и непосредственно результатами
+    расчета.
+
+    Arguments
+    ---------
+    file_path: str
+        Путь к *.tab файлу
+
+    Return
+    ------
+    data: list
+        Двумерный список, len(data) == количеству работ (job) в исходном файле,
+        в каждый подмассив массива, входят данные о каждой конкретной работы
+    """
+
     with open(file_path, 'r') as file:
         data = []
         for line in file:
             if line.split():
+                # Выбираем строки с параметрами расчета
                 if 'Setting' in line:
                     jobs_data = []
                     jobs_data.append(line)
                     data.append(jobs_data)
+                # Выбираем строки с единицами измерения и данными расчетов
                 elif 'job' not in line or 'Units' in line:
                     jobs_data.append(line)
-                else:
-                    pass
     return data
 
 
-def setting_pars(settings_str: str):
+def setting_pars(settings_str: str = None):
+    # TODO Документация job_indx
     """Функция для извлечения параметров расчета из строк,
     принимает строку из *.tab файла, содержащую подстроку
     'Settings'
@@ -67,6 +82,8 @@ def setting_pars(settings_str: str):
 
     Return
     ------
+    job_indx: str
+
     settings_list: tuple
         Кортеж содержащий объекты класса Setting, описывающие
         условия проведения расчета
@@ -74,32 +91,34 @@ def setting_pars(settings_str: str):
     Example
     -------
     >>> setting_pars('Settings  job 2 : T= 223.15 K ; x(1)= 0.1000;')
-    (T= 223.15 K, x(1)= 0.1 %)
+    (2, (T= 223.15 K, x(1)= 0.1 %))
     """
     settings_list = []
-    new_line = settings_str.split(':')[1]
+    job_indx, new_line = settings_str.split(':')
+    job_indx = job_indx.split()[2]
     settings = new_line.split(';')
     for setting in settings:
         if len(setting.split()) == 3:
             settings_list.append(Setting.from_record(setting))
         elif len(setting.split()) == 2:
-            settings_list.append(Setting.from_record(setting).convert(unit='%'))
+            settings_list.append(
+                Setting.from_record(setting).convert(unit='%'))
         elif len(setting.split()) > 3:
             for element in chunkit(setting.split()):
                 settings_list.append(
                     Setting.from_list(element).convert(unit='%'))
-    return tuple(settings_list)
+    return int(job_indx), tuple(settings_list)
 
 
 def columns_pars(head_str: str):
-    """Функция для парсинга строки загаловка таблицы,
+    """Функция для парсинга строки заголовка таблицы,
     возвращает массив с названиями всех столбцов
     данной таблицы, за исключением 'Compound'
 
     Arguments
     ---------
     head_str: str
-        Строка - загаловок таблицы
+        Строка - заголовок таблицы
 
     Return
     ------
@@ -113,46 +132,40 @@ def columns_pars(head_str: str):
     """
     return tuple(filter(lambda x: x != 'Compound', head_str.split()))
 
-# TODO Объединить функции idexes_pars и parameters_pars
 
-
-def indexes_pars(parameters: list or tuple):
-    """Функция для парсинга строки загаловка таблицы,
-    возвращает массив с названиями всех столбцов
-    данной таблицы, за исключением 'Compound'.
-    Проходит по всем строкам и берет из них только второй элемент.
+def data_pars(data: list or tuple):
+    # TODO Documentations
+    """Функция для пасинга данных одной таблицы
 
     Arguments
     ---------
-    parameters: list or tuple
-        Список содержайщий строки с данными расчета CosmoTherm
+    data: list or tuple
+        Список содержащий строки с данными расчета CosmoTherm
 
     Return
     ------
-    Возвращает список содержайщий имена веществ, заданных в
+    Возвращает список содержащий имена веществ, заданных в
     таблице *.tab файла CosmoTherm
 
     Example
     -------
-    >>> parameters = ['1 dbunew 7.9345E-10 0.31479727 5.7916E-07 -11.11061250',
-    ...               '2 dbu+new 6.3253E-33 2.96259067 3.2692E-31 -33.6383173',
-    ...               '3 cosmo1 3.0623E-36 -5.34179718 6.3968E-31 -36.8714363',
-    ...               '4 cosmo2 2.3622E-44 -4.50125249 2.1291E-39 -44.7837135',
-    ...               '5 cosmo3 1.0057E-48 -2.99155560 2.0031E-44 -49.0465532',
-    ...               '6 cosmo4 1.9260E-40 -4.55722446 1.8359E-35 -40.9690089']
-    >>> indexes_pars(parameters)
-    ('dbunew', 'dbu+new', 'cosmo1', 'cosmo2', 'cosmo3', 'cosmo4')
-    """
-    return tuple(map(lambda x: x.split()[1], parameters))
+    >>> data = ['1 dbunew 7.9345E-10 0.31479727 5.7916E-07 -11.11061250',
+    ...         '2 dbu+new 6.3253E-33 2.96259067 3.2692E-31 -33.6383173',
+    ...         '3 cosmo1 3.0623E-36 -5.34179718 6.3968E-31 -36.8714363',
+    ...         '4 cosmo2 2.3622E-44 -4.50125249 2.1291E-39 -44.7837135',
+    ...         '5 cosmo3 1.0057E-48 -2.99155560 2.0031E-44 -49.0465532',
+    ...         '6 cosmo4 1.9260E-40 -4.55722446 1.8359E-35 -40.9690089']
 
-
-def parameters_pars(parameters: list or tuple):
-    """Проходит по всем строр
+    >>> data_pars(data)
+    (['dbunew', 'dbu+new', 'cosmo1', 'cosmo2', 'cosmo3', 'cosmo4'], [['1', '7.9345E-10', '0.31479727', '5.7916E-07', '-11.11061250'], ['2', '6.3253E-33', '2.96259067', '3.2692E-31', '-33.6383173'], ['3', '3.0623E-36', '-5.34179718', '6.3968E-31', '-36.8714363'], ['4', '2.3622E-44', '-4.50125249', '2.1291E-39', '-44.7837135'], ['5', '1.0057E-48', '-2.99155560', '2.0031E-44', '-49.0465532'], ['6', '1.9260E-40', '-4.55722446', '1.8359E-35', '-40.9690089']])
     """
+    compounds = []
     new_parameters = []
-    for line in parameters:
-        new_parameters.append([line.split()[0]] + line.split()[2:])
-    return new_parameters
+    for line in data:
+        _ = line.split()
+        compounds.append(_[1])
+        new_parameters.append([_[0]] + _[2:])
+    return compounds, new_parameters
 
 
 class Job:
@@ -160,48 +173,152 @@ class Job:
     Arguments
     ---------
     data: list or tuple
-        Данные из одного "Job" в cosmo
+        Данные из одного "job" CosmoTherm
 
-    Atributes
+    Attributes
     ---------
     setting:
-        Набор настроек данного джоба
+        Набор настроек данного расчета
 
     units:
-        Единицы измерения
+        Строка с информацией о некоторых единицах измерения
 
     parameters:
-        Данные расчетов cosmotherm
+        Данные расчетов СosmoTherm
 
-    Methods
-    -------
+    Properties
+    ----------
+    full_df:
+
+    small_df:
+
+    settings_df:
 
     """
-    __slots__ = ('units', 'settings', 'parameters', 'job_indx')
+    __slots__ = ('units', 'settings', 'compounds', 'parameters', 'columns',
+                 'job_indx')
 
     def __init__(self, job: list or tuple):
-        pass
-        # setting = setting_pars(job[0])
-        # units = job[1]
-        # parameters = []
-        # job_indx = 1
+        self.units = job[1]
+        self.job_indx, self.settings = setting_pars(job[0])
+        self.compounds, self.parameters = data_pars(job[3:])
+        self.columns = columns_pars(job[2])
+
+    def full_df(self):
+        """
+        Метод для получения полной информации об одной работе,
+        вспомогательный метод для упрощения работы с классом
+        Jobs. Сработает только если класс правильно инициализирован.
+
+        Return
+        ------
+            pd.Dataframe(): Возвращает датафрейм с данными одной работы,
+                index -- мультииндекс состоящий из номера работы и списка
+                рассчитываемых веществ.
+                columns -- названия параметров,
+                data -- значения таблицы COSMOtherm
+        """
+        index = list(
+            zip([self.job_indx] * len(self.compounds), self.compounds))
+        multiindex = pd.MultiIndex.from_tuples(
+            index, names=['Job', 'Compound'])
+        return pd.DataFrame(
+            data=self.parameters, index=multiindex, columns=self.columns)
+
+    def small_df(self, columns: list or tuple):
+        """
+        Вспомогательный метод, помогает получать одну таблицу с определенными
+        столбцами. Нужен для упрощения работы с классом Jobs.
+
+        Arguments
+        ---------
+            columns: list or tuple
+                Список колонок
+        """
+        _small_df = self.full_df().loc[:, columns].copy()
+        return _small_df
+
+    def settings_df(self, detailed=None):
+        # TODO Документация
+        """
+        """
+        columns = [self.job_indx]
+        index = [x.name for x in self.settings]
+
+        if detailed:
+            data = list(self.settings)
+        else:
+            data = [x.value for x in self.settings]
+
+        return pd.DataFrame(columns=columns, index=index, data=data)
 
 
 class Jobs:
     """
+    Класс, хранит в себе данные одного расчета COSMOTherm.
+    При инициализации принимает аргумент path: str - путь к *.tab файлу,
+    автоматически считывает данные из файла и инициализирует классы Job,
+    для каждой отдельной работы.
+
     Arguments
     ---------
+        path: str
+            Путь к *.tab файлу
+
     Methods
     -------
-    get_csv():
+    full_df(csv: bool, invert: bool): df
+    small_df(csv: bool, invert: bool): df
+    settings_df(csv: bool): df
+
+    for need spec df for calc
     """
-    pass
+    __slots__ = ('path', 'data')
 
+    def __init__(self, path: str):
+        self.path = path
+        self.data = [Job(i) for i in read_data_cosmo(path)]
 
-def main():
-    import doctest
-    print(doctest.testmod())
+    def full_df(self, invert=None):
+        # TODO Документация
+        """
+        """
+        df = pd.concat([job.full_df() for job in self.data], sort=True)
+        if invert:
+            df.sort_index(axis=0, level=1, inplace=True)
+            return df.swaplevel(i=-2, j=-1, axis=0)
+        else:
+            return df
 
+    def small_df(self, columns: list or tuple = None, invert: bool = None):
+        # TODO Документация
+        """
+        """
+        if columns:
+            _small_df = self.full_df().loc[:, columns].copy()
+            if invert:
+                _small_df.sort_index(axis=0, level=1, inplace=True)
+                return _small_df.swaplevel(i=-2, j=-1, axis=0)
+            else:
+                return _small_df
+        else:
+            pass
 
-if __name__ == '__main__':
-    main()
+    def settings_df(self, detailed=None):
+        # TODO
+        """[summary]
+
+        Returns
+        -------
+        [type]
+            [description]
+        """
+        if detailed:
+            return pd.concat(
+                [job.settings_df(detailed=1) for job in self.data],
+                axis=1,
+                sort=True)
+        else:
+            return pd.concat([job.settings_df() for job in self.data],
+                             axis=1,
+                             sort=True)
