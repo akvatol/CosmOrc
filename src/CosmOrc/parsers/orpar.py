@@ -1,32 +1,25 @@
-# %%
-__author__ = 'Anton Domnin, Yaroslav Solovev'
-__license__ = 'GPL3'
-__maintainer__ = 'Anton Domnin'
-__email__ = 'a.v.daomnin@gmail.com, yaroslavsolovev78@gmail.com'
+# __author__ = 'Anton Domnin, Yaroslav Solovev'
+# __license__ = 'GPL3'
+# __maintainer__ = 'Anton Domnin'
+# __email__ = 'a.v.daomnin@gmail.com, yaroslavsolovev78@gmail.com'
 
+import re
 
 import pandas as pd
-import re
+
 from src.CosmOrc.basic.setting import Setting
 
-parameter_list = ('Electronic energy',
-                  'Zero point energy',
+parameter_list = ('Electronic energy', 'Zero point energy',
                   'Thermal vibrational correction',
                   'Thermal rotational correction',
                   'Thermal translational correction',
-                  'Thermal Enthalpy correction',
-                  'Vibrational entropy',
-                  'Rotational entropy',
-                  'Total Mass',
-                  'Translational entropy',
-                  'Temperature',
-                  'Pressure',
-                  'T*S(rot)',
-                  'cm**-1',
+                  'Thermal Enthalpy correction', 'Vibrational entropy',
+                  'Rotational entropy', 'Total Mass', 'Translational entropy',
+                  'Temperature', 'Pressure', 'T*S(rot)', 'cm**-1',
                   'THERMOCHEMISTRY')
 
 
-def read_data_orca(file_path=None):
+def read_data_orca(file_path: str = None):
     """Функция считывает из файла строки, в которые входят элементы
     из parameter_list, и добавляет их в список matching.
     Возвращает список только в том случае, если слово
@@ -73,16 +66,15 @@ def tsrot_pars(some_string: str):
     _some_info_ = r'[\s]+qrot.sn=[\s]+[-\d.]+\s'
     _TSrot_segment_ = r'T\*S\(rot\)=[\s]+'
     _value_ = r'([-\d.]+)[\s]+kcal\/mol'
-    _reg = re.search(_sn_coef_ + _some_info_ +
-                     _TSrot_segment_ + _value_,
+    _reg = re.search(_sn_coef_ + _some_info_ + _TSrot_segment_ + _value_,
                      some_string)
     if _reg:
         _sn_coef = _reg.group(1)
         _value = _reg.group(2)
         _unit = 'kcal/mol'
-        return Setting(name=f'{_sn_coef} T*S(rot)',
-                       value=_value,
-                       unit=_unit).convert(koef=4182, unit='J/mol')
+        return Setting(
+            name=f'{_sn_coef} T*S(rot)', value=_value, unit=_unit).convert(
+                koef=4182, unit='J/mol')
 
 
 def tp_pars(some_string: str):
@@ -104,13 +96,12 @@ def tp_pars(some_string: str):
     _value_ = r'([\d]+.[\d]+)'
     _unit_ = r'\s*(\w+)'
 
-    _reg = re.search(_name_ + _dots_ +
-                     _value_ + _unit_,
-                     some_string)
+    _reg = re.search(_name_ + _dots_ + _value_ + _unit_, some_string)
     if _reg:
-        return Setting(name=_reg.group(1).split()[0],
-                       value=_reg.group(2),
-                       unit=_reg.group(3))
+        return Setting(
+            name=_reg.group(1).split()[0],
+            value=_reg.group(2),
+            unit=_reg.group(3))
 
 
 def other_param_pars(some_string: str):
@@ -133,9 +124,9 @@ def other_param_pars(some_string: str):
     _reg = re.search(_name_ + _dots_ + _value_, some_string)
 
     if _reg:
-        return Setting(name=_reg.group(1),
-                       value=_reg.group(2),
-                       unit='Eh').convert(koef=2625500, unit='J/mol')
+        return Setting(
+            name=_reg.group(1), value=_reg.group(2), unit='Eh').convert(
+                koef=2625500, unit='J/mol')
 
 
 def freq_pars(some_str: str):
@@ -157,9 +148,7 @@ def freq_pars(some_str: str):
     _reg = re.search(_freq_number_ + _value_ + _unit_, some_str)
 
     if _reg:
-        return Setting(name='freq.',
-                       value=_reg.group(2),
-                       unit=_reg.group(3))
+        return Setting(name='freq.', value=_reg.group(2), unit=_reg.group(3))
 
 
 def pars_all_matches(data: list or tuple):
