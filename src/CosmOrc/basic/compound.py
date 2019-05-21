@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+from typing import Callable, Iterable, Union, Optional, List
+
 import src.CosmOrc.parsers.gauspar as gauspar
 
 R = 8.31441
@@ -13,12 +15,13 @@ N0 = 6.022_140_85774e-23  # 1/mol
 class Compound:
 
     __slots__ = ('qm_data', 'name', 'linear', 'E0', 'stat_sum', 'path_to_file',
-                 'sn', 'atom', 'qm_program', 'mass', 'vib_temp')
+                 'sn', 'atom', 'qm_program', 'mass', 'vib_temp', 'freqs', 'ideal')
 
     def __init__(self,
                  path_to_file: str = None,
                  name: str = None,
                  qm_program: str = None,
+                 ideal: bool = None,
                  linear: bool = None,
                  atom: bool = None,
                  sn: int = None):
@@ -33,9 +36,11 @@ class Compound:
             self.qm_program = 'gaussian'
 
         if linear:
-            self.linear = 1
+            self.linear = 1.0
         else:
             self.linear = 1.5
+
+        self.ideal = ideal
 
         if self.qm_program.lower() == 'gaussian':
             self.qm_data = gauspar.file_pars(path_to_file)
@@ -49,22 +54,26 @@ class Compound:
 
         self.E0 = self.qm_data['SCF Energy']
         # TODO Поправил для расчета атомов
+        # TODO Добавил частоты
+        self.freqs = self.qm_data['freq.']
+        self.freqs = self.freqs[self.freqs > 0].dropna()
 
         if not self.atom:
             self.vib_temp = np.fromiter(
                 map(lambda x: 299792458 / (1 / x / 100) * 4.79924466221135e-11,
-                    self.qm_data['freq.']), np.float64)
+                    self.freqs), np.float64)
         else:
             # Если нет частот, то не пытаемся пересчитать
             self.vib_temp = np.array([0])
 
     def __repr__(self):
-        return f"Compound(path_to_file='{self.path_to_file}', "\
+        _representation = f"Compound(path_to_file='{self.path_to_file}', "\
                           f"name='{self.name}', "\
                           f"qm_program='{self.qm_program}', "\
                           f"linear={self.linear}, "\
                           f"atom={self.atom}, "\
                           f"sn={self.sn})"
+        return _representation
 
     def __str__(self):
         return self.name
@@ -103,6 +112,7 @@ def vib_temp_t(compound: Compound, temperature: np.array) -> np.array:
     freq = compound.vib_temp
     vib = []
 
+    # TODO исправить чтобы работало для одной температуры
     for t in temperature:
         vib.append(freq / t)
     return np.array(vib)  # 2 dimensional np.array
@@ -141,8 +151,8 @@ def vibrational_enthalpy(compound: Compound, temperature: np.array,
     return df
 
 
-def enthalpy(compound: Compound, temperature: np.array,
-             pressure: np.array) -> np.array:
+def enthalpy(compound: Compound, temperature: np.array = None,
+             pressure: np.array = None) -> np.array:
     """[summary]
 
     Parameters
@@ -170,6 +180,12 @@ def enthalpy(compound: Compound, temperature: np.array,
     # Ht = Hr = 1.5*R*T for nonlinear molecules
     # Hr = R*T for linear molecules
     # Hv = N0*h∑(vi/(expUi - 1))
+
+    if not temperature:
+        temperature = np.array([298.15])
+    
+    if not pressure:
+        pressure = np.array([1])
 
     Ht = 1.5 * R * temperature
     rt = R * temperature
@@ -258,12 +274,19 @@ def rotational_entropy(compound: Compound, temperature: np.array,
     y = np.exp(compound.qm_data['Rotational Entropy'] / R - compound.linear
                ) / compound.qm_data['Temperature']**compound.linear
     qr = y * temperature**compound.linear
-    df = pd.DataFrame(
-        index=pressure,
-        columns=temperature,
-        data=[R * (np.log(qr) + compound.linear)] * len(pressure))
+    index = pressure
+    columns = temperature
+    data = [R * (np.log(qr) + compound.linear)] * len(pressure)
 
-    return df
+    try:
+        df = pd.DataFrame(
+            index=index,
+            columns=columns,
+            data=data)
+        return df
+    except Exception as e:
+        error_txt = f'\nError: {e}\n index:{index},\n columns:{columns}\n data:{data}\n'
+        raise Exception(error_txt)
 
 
 def vibrational_entropy(compound: Compound, temperature: np.array,
@@ -298,8 +321,8 @@ def vibrational_entropy(compound: Compound, temperature: np.array,
     return df
 
 
-def total_entropy(compound: Compound, temperature: np.array,
-                  pressure: np.array) -> np.array:
+def total_entropy(compound: Compound, temperature: np.array = None,
+                  pressure: np.array = None) -> np.array:
     """[summary]
 
     Parameters
@@ -320,6 +343,12 @@ def total_entropy(compound: Compound, temperature: np.array,
 
     # Se = R*LnW - const
 
+    if not temperature:
+        temperature = np.array([298.15])
+
+    if not pressure:
+        pressure = np.array([1])
+
     Se = compound.qm_data['Electronic Entropy']
     if compound.atom:
         Sv = 0
@@ -336,8 +365,8 @@ def total_entropy(compound: Compound, temperature: np.array,
     return (St + Sr + Sv + Se)
 
 
-def gibbs_energy(compound: Compound, temperature: np.array,
-                 pressure: np.array) -> np.array:
+def gibbs_energy(compound: Compound, temperature: np.array = None,
+                 pressure: np.array = None) -> np.array:
     """[summary]
 
     Parameters
@@ -357,26 +386,66 @@ def gibbs_energy(compound: Compound, temperature: np.array,
     # Gcorr = Hcorr - T*Stot
     # G = H(T) - T*Stot
 
+    if not temperature:
+        temperature = np.array([298.15])
+
+    if not pressure:
+        pressure = np.array([1])
+
     return enthalpy(
         compound=compound, temperature=temperature,
         pressure=pressure) - temperature * total_entropy(
             compound=compound, temperature=temperature, pressure=pressure)
 
 
+# %%
 def main():
-    fail = '/home/antond/Skorb/Anions/Br/Br.log'
-    NiDMSO12 = {
-        'name': 'Ni',
-        'path_to_file': fail,
-        'linear': True,
-        'atom': True
-    }
-    a = Compound.from_dict(NiDMSO12)
-    temperature = np.array([298.15])  # np.arange(300, 400 + 5, 5)
-    pressure = np.array([1])  # p.arange(1, 10 + 0.1, 0.1)
-
-    return a
+#     import os
+# 
+#     temperature = np.array([313.15, 323.15, 333.15, 343.15, 353.15, 363.15])  # np.arange(300, 400 + 5, 5)
+#     pressure = np.array([1])  # p.arange(1, 10 + 0.1, 0.1)
+# 
+#     with open('pasha.csv', 'w') as dump:
+#         for files in os.listdir("/home/antond/Загрузки/archive/"):
+#             for temperatures in temperature:
+#                 try:
+#                     if 'hbr' in files:
+#                         Comp = {
+#                             'name': files,
+#                             'path_to_file': "/home/antond/Загрузки/archive/" + files,
+#                             'linear': True
+#                         }
+#                         a = Compound.from_dict(Comp)
+#                         g_energy = gibbs_energy(
+#                             compound=a, temperature=np.array([temperatures]), pressure=pressure)[temperatures].loc[1]
+#                     else:
+#                         Comp = {
+#                             'name': files,
+#                             'path_to_file': "/home/antond/Загрузки/archive/" + files,
+#                             'linear': False
+#                         }
+#                         a = Compound.from_dict(Comp)
+#                         g_energy = gibbs_energy(
+#                             compound=a, temperature=np.array([temperatures]), pressure=pressure)[temperatures].loc[1]
+# 
+#                     string = f'File:\t{files}, GibbsEnergy=\t{g_energy}, T={temperatures}\n'
+#                 except:
+#                     print(a.freqs)
+#                     string = f'Error in\t{files}\n'
+#                 dump.write(string)
+    pass
+    # Искал ошибку
+    # files = "/home/antond/projects/HL/TS4c-4d.log"
+    # Comp = {'name': files, 'path_to_file': files, 'linear': False}
+    # a = Compound.from_dict(Comp)
+    # g_energy = gibbs_energy(
+    #     compound=a, temperature=temperature, pressure=pressure)[398.15].loc[1]
+    # c = rotational_entropy(
+    #     compound=a, temperature=temperature, pressure=pressure)
+    # print(c)
+    # string = f'File: {files}, Gibbs Energy = {g_energy}, condition=({temperature}, {pressure}) \n'
 
 
 if __name__ == '__main__':
     main()
+

@@ -1,5 +1,7 @@
-# %%
+import re
+
 import pandas as pd
+
 from src.CosmOrc.basic.setting import Setting
 
 
@@ -32,7 +34,7 @@ def chunkit(data: list or tuple = None, n: int = None):
     avg = len(data) / n
     last = 0
     while last < len(data):
-        new_data.append(data[int(last):int(last + avg)])
+        new_data.append(data[int(last) : int(last + avg)])
         last += avg
     return new_data
 
@@ -54,22 +56,30 @@ def read_data_cosmo(file_path: str = None) -> list:
         в каждый подмассив массива, входят данные о каждой конкретной работы
     """
 
-    with open(file_path, 'r') as file:
+    with open(file_path, "r") as file:
         data = []
         for line in file:
             if line.split():
                 # Выбираем строки с параметрами расчета
-                if 'Setting' in line:
+                if "Setting" in line:
                     jobs_data = []
                     jobs_data.append(line)
                     data.append(jobs_data)
                 # Выбираем строки с единицами измерения и данными расчетов
-                elif 'job' not in line or 'Units' in line:
+                elif "job" not in line or "Units" in line:
                     jobs_data.append(line)
     return data
 
 
-def setting_pars(settings_str: str = None):
+def compound_nr(some_str: str):
+
+    _compound_nr = r"x\(([\d]*)\)="
+    _compound_nr_string = re.search(_compound_nr, some_str)
+    if _compound_nr_string:
+        return _compound_nr_string.group(1)
+
+
+def setting_pars(settings_str: str):
     # TODO Документация job_indx
     """Функция для извлечения параметров расчета из строк,
     принимает строку из *.tab файла, содержащую подстроку
@@ -94,19 +104,22 @@ def setting_pars(settings_str: str = None):
     (2, (T= 223.15 K, x(1)= 0.1 %))
     """
     settings_list = []
-    job_indx, new_line = settings_str.split(':')
+    job_indx, new_line = settings_str.split(":")
     job_indx = job_indx.split()[2]
-    settings = new_line.split(';')
+    settings = new_line.split(";")
     for setting in settings:
+        new_setting = None
         if len(setting.split()) == 3:
             settings_list.append(Setting.from_record(setting))
         elif len(setting.split()) == 2:
-            settings_list.append(
-                Setting.from_record(setting).convert(unit='%'))
+            new_setting = Setting.from_record(setting)
+            new_setting.convert(name=compound_nr(new_setting.name), unit="%")
+            settings_list.append(new_setting)
         elif len(setting.split()) > 3:
             for element in chunkit(setting.split()):
-                settings_list.append(
-                    Setting.from_list(element).convert(unit='%'))
+                new_setting = Setting.from_record(element)
+                new_setting.convert(name=compound_nr(new_setting.name), unit="%")
+                settings_list.append(new_setting)
     return int(job_indx), tuple(settings_list)
 
 
@@ -130,7 +143,7 @@ def columns_pars(head_str: str):
     >>> columns_pars('Nr Compound H ln(gamma) pv Gsolv pvExp HpvExp GpvExp')
     ('Nr', 'H', 'ln(gamma)', 'pv', 'Gsolv', 'pvExp', 'HpvExp', 'GpvExp')
     """
-    return tuple(filter(lambda x: x != 'Compound', head_str.split()))
+    return tuple(filter(lambda x: x != "Compound", head_str.split()))
 
 
 def data_pars(data: list or tuple):
@@ -195,14 +208,15 @@ class Job:
     settings_df:
 
     """
-    __slots__ = ('units', 'settings', 'compounds', 'parameters', 'columns',
-                 'job_indx')
+
+    __slots__ = ("units", "settings", "compounds", "parameters", "columns", "job_indx")
 
     def __init__(self, job: list or tuple):
         self.units = job[1]
         self.job_indx, self.settings = setting_pars(job[0])
         self.compounds, self.parameters = data_pars(job[3:])
         self.columns = columns_pars(job[2])
+        self.settings = list(self.settings)
 
     def full_df(self):
         """
@@ -218,12 +232,11 @@ class Job:
                 columns -- названия параметров,
                 data -- значения таблицы COSMOtherm
         """
-        index = list(
-            zip([self.job_indx] * len(self.compounds), self.compounds))
-        multiindex = pd.MultiIndex.from_tuples(
-            index, names=['Job', 'Compound'])
+        index = list(zip([self.job_indx] * len(self.compounds), self.compounds))
+        multiindex = pd.MultiIndex.from_tuples(index, names=["Job", "Compound"])
         return pd.DataFrame(
-            data=self.parameters, index=multiindex, columns=self.columns)
+            data=self.parameters, index=multiindex, columns=self.columns
+        )
 
     def small_df(self, columns: list or tuple):
         """
@@ -245,8 +258,14 @@ class Job:
         columns = [self.job_indx]
         index = [x.name for x in self.settings]
 
+        if 'p=' in index:
+            pass
+        else:
+            index.append('p=')
+            self.settings.append(Setting(name='p=', value=1, unit='atm'))
+
         if detailed:
-            data = list(self.settings)
+            data = self.settings
         else:
             data = [x.value for x in self.settings]
 
@@ -273,7 +292,8 @@ class Jobs:
 
     for need spec df for calc
     """
-    __slots__ = ('path', 'data')
+
+    __slots__ = ("path", "data")
 
     def __init__(self, path: str):
         self.path = path
@@ -284,6 +304,8 @@ class Jobs:
         """
         """
         df = pd.concat([job.full_df() for job in self.data], sort=True)
+        df = df.apply(pd.to_numeric)
+        df.fillna(0, inplace=True)
         if invert:
             df.sort_index(axis=0, level=1, inplace=True)
             return df.swaplevel(i=-2, j=-1, axis=0)
@@ -314,11 +336,13 @@ class Jobs:
             [description]
         """
         if detailed:
-            return pd.concat(
-                [job.settings_df(detailed=1) for job in self.data],
-                axis=1,
-                sort=True)
+            df = pd.concat(
+                [job.settings_df(detailed=1) for job in self.data], axis=1, sort=True
+            )
+            df.fillna(0, inplace=True)
+            return df
         else:
-            return pd.concat([job.settings_df() for job in self.data],
-                             axis=1,
-                             sort=True)
+            df = pd.concat([job.settings_df() for job in self.data], axis=1, sort=True)
+            df.fillna(0, inplace=True)
+            return df
+
