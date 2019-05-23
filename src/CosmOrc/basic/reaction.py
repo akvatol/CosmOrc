@@ -20,6 +20,7 @@ DEFAULT_CONDITION: Dict[str, List[Union[int, float]]] = {
 
 R = 8.31441
 
+# TODO Пренести логер в майн, ну и поправить логирование
 # code from https://docs.python.org/3/howto/logging-cookbook.html
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -39,6 +40,9 @@ fh.setFormatter(formatter)
 logger.addHandler(ch)
 logger.addHandler(fh)
 
+
+# TODO: Нужно считать иначе, написать отдельные функции для расчета
+# параметров из космы и т.д., а потом из них составить функцию для реакции.
 
 class Reaction:
     def __init__(self, name: str, reaction: List[Dict[Compound, int]]):
@@ -103,7 +107,8 @@ class Reaction:
             logger.debug(
                 f"{self.reaction[0][reagents]}*{reagents.name} Gibbs Energy calc"
             )
-            GE0 += self.reaction[0][reagents] * gibbs_energy(
+            reaction_coefficient = self.reaction[0][reagents]
+            GE0 += reaction_coefficient * gibbs_energy(
                 compound=reagents,
                 temperature=conditions["temperature"],
                 pressure=conditions["pressure"],
@@ -115,7 +120,8 @@ class Reaction:
                 f"{self.reaction[1][products]}*{products.name} Gibbs Energy calc"
             )
 
-            GE1 += self.reaction[1][products] * gibbs_energy(
+            reaction_coefficient = self.reaction[1][products]
+            GE1 += reaction_coefficient * gibbs_energy(
                 compound=products,
                 temperature=conditions["temperature"],
                 pressure=conditions["pressure"],
@@ -159,10 +165,12 @@ class Reaction:
         G0 = 0
         G1 = 0
         for reagents in self.reaction[0].keys():
+
+            reaction_coefficient = self.reaction[0][reagents]
             reagents_nr = cosmo_solv_data["Nr"].loc[reagents.name].values[0]
             # Умножаем на коэффициент, так как cospar
             # !!!! не переводит значение энергии в джоули !!!!!
-            G0 += cosmo_solv_data["Gsolv"].loc[reagents.name] * 4184
+            G0 += reaction_coefficient * cosmo_solv_data["Gsolv"].loc[reagents.name] * 4184
             if reagents.ideal:
                 pass
             else:
@@ -170,18 +178,20 @@ class Reaction:
                     np.log(cosmo_setting.loc[str(reagents_nr)].T)
                     + cosmo_solv_data["ln(gamma)"].loc[reagents.name]
                 )
-                G0 += activity * R * cosmo_setting.loc["T="].T
+                G0 += reaction_coefficient * activity * R * cosmo_setting.loc["T="].T
 
             # Gas phase part
-            G0 += self._gibbs_energy_reagents_cosmo(
+            G0 += reaction_coefficient * self._gibbs_energy_reagents_cosmo(
                 compound=reagents, cosmo_settings=cosmo_setting.T
             )
 
         for products in self.reaction[1].keys():
+
+            reaction_coefficient = self.reaction[1][products]
             products_nr = str(cosmo_solv_data["Nr"].loc[products.name].values[0])
             # Умножаем на коэффициент, так как cospar
             # !!!! не переводит значение энергии в джоули !!!!!
-            G1 += cosmo_solv_data["Gsolv"].loc[products.name] * 4184
+            G1 += reaction_coefficient * cosmo_solv_data["Gsolv"].loc[products.name] * 4184
             if products.ideal:
                 pass
             else:
@@ -189,8 +199,8 @@ class Reaction:
                 ln_gamma = cosmo_solv_data["ln(gamma)"].loc[products.name]
                 activity = ln_x + ln_gamma
 
-                G1 += activity * R * cosmo_setting.loc["T="].T
-            G1 += self._gibbs_energy_reagents_cosmo(
+                G1 += reaction_coefficient * activity * R * cosmo_setting.loc["T="].T
+            G1 += reaction_coefficient * self._gibbs_energy_reagents_cosmo(
                 compound=products, cosmo_settings=cosmo_setting.T
             )
 
@@ -209,7 +219,6 @@ class Reaction:
 
         return Gtot
 
-@timeit
 def main():
     Comp1 = Compound(
         path_to_file="/home/antond/Загрузки/archive/iPrOH-acetone-HBr.log",
