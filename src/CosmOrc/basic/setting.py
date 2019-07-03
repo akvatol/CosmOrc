@@ -55,7 +55,7 @@ class Setting:
 
     def __init__(self, name=None, value=None, unit=None, spec_name=None):
         self.spec_name = spec_name
-        self.name = str(name)
+        self.name = str(name).lower().strip()
         try:
             self.value = float(value)
         except Exception as e:
@@ -131,7 +131,7 @@ class Setting:
         """
         # TODO написать isinstance for value and koef
         if name:
-            self.name = str(name)
+            self.name = str(name).lower().strip()
         if koef and value:
             raise ValueError("Convert must have only koef or value")
         if koef:

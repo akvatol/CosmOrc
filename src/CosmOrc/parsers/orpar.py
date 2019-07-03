@@ -7,7 +7,13 @@ import re
 
 import pandas as pd
 
+from typing import List, Tuple, Any, Union
+
 from src.CosmOrc.basic.setting import Setting
+
+
+EhToJ_Mol = 4.359744 * 6.022e5
+
 
 parameter_list = ('Electronic energy', 'Zero point energy',
                   'Thermal vibrational correction',
@@ -15,8 +21,8 @@ parameter_list = ('Electronic energy', 'Zero point energy',
                   'Thermal translational correction',
                   'Thermal Enthalpy correction', 'Vibrational entropy',
                   'Rotational entropy', 'Total Mass', 'Translational entropy',
-                  'Temperature', 'Pressure', 'T*S(rot)', 'cm**-1',
-                  'THERMOCHEMISTRY')
+                  'Temperature', 'Pressure', 'T*S(rot)', 'cm**-1', 'Electronic entropy',
+                  'THERMOCHEMISTRY', 'Total enthalpy', 'Final Gibbs free enthalpy')
 
 
 def read_data_orca(file_path: str = None):
@@ -42,7 +48,13 @@ def read_data_orca(file_path: str = None):
         for line in data_file:
             if any(xs in line for xs in parameter_list):
                 matching.append(line)
+            if 'Number of atoms' in line:
+                atm_line = line
+            if 'Number of degrees of freedom' in line:
+                deg_line = line
     if any('THERMOCHEMISTRY' in s for s in matching):
+        matching.append(atm_line)
+        matching.append(deg_line)
         return matching
 
 
@@ -74,7 +86,7 @@ def tsrot_pars(some_string: str):
         _unit = 'kcal/mol'
         return Setting(
             name=f'{_sn_coef} T*S(rot)', value=_value, unit=_unit).convert(
-                koef=4182, unit='J/mol')
+                koef=4184, unit='J/mol')
 
 
 def tp_pars(some_string: str):
@@ -92,7 +104,7 @@ def tp_pars(some_string: str):
         значения параметра в J/mol.
     """
     _name_ = r'([\w\s]+)'
-    _dots_ = r'\s*\.\.\.\s*'
+    _dots_ = r'\s*[\.]+\s*'
     _value_ = r'([\d]+.[\d]+)'
     _unit_ = r'\s*(\w+)'
 
@@ -119,14 +131,14 @@ def other_param_pars(some_string: str):
         значения параметра в J/mol.
     """
     _name_ = r'([\w\s]+\w+)'
-    _dots_ = r'\s*\.\.\.\s*'
+    _dots_ = r'\s*[\.]+\s*'
     _value_ = r'([-\d.]+)\s*.*'
     _reg = re.search(_name_ + _dots_ + _value_, some_string)
 
     if _reg:
         return Setting(
             name=_reg.group(1), value=_reg.group(2), unit='Eh').convert(
-                koef=2625500, unit='J/mol')
+                koef=EhToJ_Mol, unit='J/mol')
 
 
 def freq_pars(some_str: str):
@@ -151,7 +163,42 @@ def freq_pars(some_str: str):
         return Setting(name='freq.', value=_reg.group(2), unit=_reg.group(3))
 
 
-def pars_all_matches(data: list or tuple):
+def name_value_pars(some_str: str):
+    _name = r'([\w\s]+)'
+    _dots = r'\s*[\.]+\s*'
+    _value = r'([\d]+)'
+    _reg = re.search(_name + _dots + _value, some_str)
+
+    if _reg:
+        return Setting(name=_reg.group(1), value=_reg.group(2), unit='')
+
+
+def post_process(element: Setting):
+
+    if element.name == 'number of atoms':
+        element.convert(name='natoms')
+    elif element.name == 'total':
+        element.convert(name='molecular mass')
+    elif element.name == 'zero point energy':
+        element.convert(name='zero-point energy')
+    elif element.name == 'final gibbs free enthalpy':
+        element.convert('sum of electronic and thermal free energies')
+    elif element.name == 'total enthalpy':
+        element.convert(name='sum of electronic and thermal enthalpies')
+    elif element.name == 'electronic energy':
+        element.convert(name='scf energy')
+    elif 'thermochemistry at' in element.name:
+        element = None
+    elif element.name == 'number of degrees of freedom':
+        element.convert('deg. of freedom')
+    elif element.name == 'freq.' and element.value == 0:
+        element = None
+    else:
+        pass
+    return element
+
+
+def file_pars(file_path: str = None):
     """Функция объединяет в себе все предыдущие функции,
     на вход получает набор готовых данных из read_data_orca,
     а возвращает объект pd.Series, содержащий в себе все данные из
@@ -164,25 +211,65 @@ def pars_all_matches(data: list or tuple):
 
     Return
     ------
-        Объект pd.Serires (pd == pandas), содержаший в себе
+        Объект pd.Serires (pd == pandas), содержащий в себе
         данные из исходного файла.
     """
-    _all_settings = []
-    if data:
-        for string in reversed(data):
+    read_data = read_data_orca(file_path)
+    _all_parameters = []
+    if read_data:
+        for string in reversed(read_data):
             if 'sn=' in string:
-                _all_settings.append(tsrot_pars(string))
+                _all_parameters.append(tsrot_pars(string))
             elif 'Temperature' in string:
-                _all_settings.append(tp_pars(string))
+                _t = tp_pars(string)
+                _all_parameters.append(tp_pars(string))
             elif 'Pressure' in string:
-                _all_settings.append(tp_pars(string))
+                _all_parameters.append(tp_pars(string))
             elif 'Total Mass' in string:
-                _all_settings.append(tp_pars(string))
+                _all_parameters.append(tp_pars(string))
             elif 'cm**-1' in string:
-                _all_settings.append(freq_pars(string))
+                if freq_pars(string) != 0:
+                    _all_parameters.append(freq_pars(string))
+            elif 'Number of atoms' in string:
+                _all_parameters.append(name_value_pars(string))
+            elif 'Number of degrees of freedom' in string:
+                _all_parameters.append(name_value_pars(string))
             else:
-                _all_settings.append(other_param_pars(string))
-    return pd.Series(data=_all_settings).dropna()
+                _all_parameters.append(other_param_pars(string))
+
+    raw_data = [post_process(element)
+                for element in _all_parameters if element is not None]
+
+    # Because in orca entropy is T*S 
+    for element in raw_data:
+        if element and 'entropy' in element.name:
+            element.convert(koef=_t.value**(-1))
+        elif element and 't*s' in element.name:
+            # change name and value from "x t*s(rot)" to "x s(rot)"
+            new_name = element.name.split()[0] + ' s(rot)'
+            element.convert(koef=_t.value**(-1), name = new_name)
+
+    data = [parameter for parameter in raw_data if parameter is not None]
+
+    if data:
+        indexes = [parameter.name for parameter in data]
+        series = pd.Series(data=[x.value for x in data],
+                           name='parameters', index=indexes)
+        series.loc['qm_program'] = 'orca'
+        if series.loc['natoms'] == 1:
+            series.loc['atom'] = True
+            series.loc['linear'] = True
+        else:
+            series.loc['atom'] = False
+            if series.loc['deg. of freedom'] == 1:
+                series.loc['linear'] = True
+            elif series.loc['natoms'] > 1 and series.loc['natoms']*3 - 5 == len(series.loc['freq.']):
+                series.loc['linear'] = True
+            else:
+                series.loc['linear'] = False
+        return series
+
+    return pd.Series(data=_all_parameters)
 
 
 def main():

@@ -1,8 +1,9 @@
 import os
 import re
 
-import argparse as ag
 import pandas as pd
+
+from typing import List, Tuple, Any, Union
 
 from src.CosmOrc.basic.setting import Setting
 
@@ -23,7 +24,9 @@ properties_list = [
 ]
 
 
-def list_unapck(some_list: list or tuple = None) -> tuple:
+# ^\s+(\d+)\s+\d+\s+\d+\s+\-?[\d.]+\s+\-?[\d.]+\s+\-?[\d.]+$ для атомов
+
+def list_unpack(some_list: List) -> Tuple:
     """Функция для распаковки списков. Распаковывает вложенные
     списки на один уровень.
 
@@ -35,7 +38,7 @@ def list_unapck(some_list: list or tuple = None) -> tuple:
     Return
     ------
     new_list: tuple
-        Список, распкованный на один уровень
+        Список, распакованный на один уровень
     """
     new_list = []
     for element in some_list:
@@ -48,7 +51,7 @@ def list_unapck(some_list: list or tuple = None) -> tuple:
 
 
 # TODO Убрать и протестировать сколько будет занимать по времени
-def read_data_gaussian(file_path: str = None) -> tuple:
+def read_data_gaussian(file_path: Union[str, bytes, int, 'os.PathLike[Any]']) -> Tuple:
     # TODO Переделать с учетом того что file_path = None
     """Функция для чтения данных из Gaussian. Проверяет есть ли
     термохимические данные в файле, и считывает нужные строки
@@ -64,8 +67,8 @@ def read_data_gaussian(file_path: str = None) -> tuple:
         Кортеж в который входят все строки содержащие в себе
         элементы списков parameter_list или properties_list
     """
-    matching = []
-    scf_energy = None
+    matching: List[str] = []
+    scf_energy: str
     with open(file_path, 'r') as data_file:
         for line in data_file:
             if any(
@@ -75,12 +78,18 @@ def read_data_gaussian(file_path: str = None) -> tuple:
                 matching.append(line)
             if 'SCF Done' in line:
                 scf_energy = line
+            if 'NAtoms' in line:
+                d_line = line
+            if 'Full point group' in line:
+                sym_line = line
+            if 'Deg. of freedom' in line:
+                free_line = line
+
+        matching.append(free_line)
+        matching.append(sym_line)
+        matching.append(d_line)
         matching.append(scf_energy)
     return tuple(matching)
-
-
-# TODO Сделать парсер для давлений и температуры
-# (Temperature)\s*([0-9.]+)\s*([\w]+).\s*(Pressure)\s*([0-9.]+)\s*([\w]+).
 
 
 def scf_energy_pars(some_str: str = None):
@@ -95,7 +104,7 @@ def scf_energy_pars(some_str: str = None):
 
 def molecular_mass_pars(some_str: str = None) -> Setting:
     # TODO Написать документацию и переделать с учетом того что строка = None
-    """Парсер молеколуярной массы
+    """Парсер молекулярной массы
     """
     _mol_mass = r'Molecular mass:\s*([0-9.]+)\s*([\w]+).'
     _mol_mass_string = re.search(_mol_mass, some_str)
@@ -106,7 +115,7 @@ def molecular_mass_pars(some_str: str = None) -> Setting:
             unit=_mol_mass_string.group(2))
 
 
-def tp_pars(some_str: str = None) -> list:
+def tp_pars(some_str: str) -> List:
     """Функция для парсинга температуры и давленя в *.out файле
 
     Arguments
@@ -116,7 +125,7 @@ def tp_pars(some_str: str = None) -> list:
     Return
     ------
     Список содержащий два объекта класса Setting,
-    Температура и давление соответсвенно
+    Температура и давление соответственно
     """
     _temperature = r'(Temperature)\s*([0-9.]+)\s*([\w]+).'
     _pressure = r'(Pressure)\s*([0-9.]+)\s*([\w]+).'
@@ -134,7 +143,7 @@ def tp_pars(some_str: str = None) -> list:
         ]
 
 
-def freq_pars(some_str: str = None) -> list:
+def freq_pars(some_str: str) -> list:
     # TODO Переделать с учетом того что str = None
     """Функция для парсинга частот
 
@@ -151,11 +160,14 @@ def freq_pars(some_str: str = None) -> list:
     _current_freq_ = []
     _name_ = r'(\w+)'
     _freq_value_ = r'([-\d.]+)'
-    freq_str = re.search(
-        _name_ + r'\s\-\-\s*' + _freq_value_ + r'\s*' + _freq_value_ + r'\s*' +
-        _freq_value_, some_str)
+    _reg_str = _name_ + r'\s\-\-\s*'
+    # _reg_str = _name_ + r'\s\-\-\s*' + _freq_value_ + r'\s*' + _freq_value_ + r'\s*' + _freq_value_
+    # Когда в строке не 3 частоты
+    for i in range(len(some_str.split()) - 2):
+        _reg_str += _freq_value_ + r'\s*'
+    freq_str = re.search(_reg_str, some_str)
     if freq_str:
-        for i in range(2, 5):
+        for i in range(2, len(some_str.split())):
             _current_freq_.append(
                 Setting(name='freq.', value=freq_str.group(i), unit='cm**-1'))
     return _current_freq_
@@ -175,24 +187,23 @@ def parameter_pars(some_str: str = None) -> Setting:
     Return
     ------
     Возвращает объект класса Setting, содержащий в себе термодинамические
-    парамаетры в J/mol
+    параметры в J/mol
     """
     _name_ = some_str.split('=')[0]
     _value_ = r'(-?[0-9]{1,10}\.[0-9]{6})'
     param_str = re.search(_value_, some_str)
-    # koef = 4.359744 * 6.022e5
-    # hartree_to_yj_coef / N_Avogadro
+    # coef = 4.359744 * 6.022e5
+    # hartree_to_j_coef / N_Avogadro
     if param_str:
         return Setting(
             name=_name_[1:], value=param_str.group(1), unit='Eh').convert(
                 koef=EhToJ_Mol, unit='J/mol')
 
 
-def properties_pars(some_str: str = None) -> Setting:
+def properties_pars(some_str: str) -> Setting:
     # TODO Дописать документацию
-    # TODO Переделать с учетом того что file_path = None
-    """Функция для прасинга энтропии, принимает строку содежащую
-    одно из слов списка properties_list, возращает объект класса Setting
+    """Функция для прасинга энтропии, принимает строку содержащую
+    одно из слов списка properties_list, возвращает объект класса Setting
     в J/mol*K
 
     Arguments
@@ -217,32 +228,60 @@ def properties_pars(some_str: str = None) -> Setting:
                 koef=4.184, unit='J/mol*K')
 
 
-def file_pars(file_path: str = None) -> pd.Series:
+def file_pars(file_path: str) -> pd.Series:
     # TODO Дописать документацию. Функция в целом нуждается в доработке
     """
     """
     read_data = read_data_gaussian(file_path)
-    _all_setting = []
+    _all_parameters = []
     if read_data:
         for line in read_data:
             if 'Frequencies' in line:
-                _all_setting.append(freq_pars(line))
+                _all_parameters.append(freq_pars(line))
             elif any(xs in line for xs in parameter_list):
-                _all_setting.append(parameter_pars(line))
+                _all_parameters.append(parameter_pars(line))
             elif any(xs in line for xs in properties_list):
-                _all_setting.append(properties_pars(line))
+                _all_parameters.append(properties_pars(line))
             elif 'Temperature' in line:
-                _all_setting.append(tp_pars(line))
+                _all_parameters.append(tp_pars(line))
             elif 'Molecular mass' in line:
-                _all_setting.append(molecular_mass_pars(line))
+                _all_parameters.append(molecular_mass_pars(line))
             elif 'SCF Done' in line:
-                _all_setting.append(scf_energy_pars(line))
+                _all_parameters.append(scf_energy_pars(line))
+            elif 'NAtoms' in line:
+                _all_parameters.append(
+                    Setting(name='NAtoms', value=line.split()[1], unit='n'))
+            elif 'Full point group' in line:
+                sym_line = line.split()[3]
+                _all_parameters.append(
+                    Setting(name=line.split()[4], value=line.split()[5], unit=''))
+            elif 'Deg. of freedom' in line:
+                _all_parameters.append(
+                    Setting(name='Deg. of freedom', value=line.split()[3], unit=''))
             else:
                 pass
 
-    raw_data = list_unapck(_all_setting)
+    raw_data = list_unpack(_all_parameters)
     data = [parameter for parameter in raw_data if parameter is not None]
     if data:
         indexes = [parameter.name for parameter in data]
-        return pd.Series(
-            data=[x.value for x in data], name='parameters', index=indexes)
+        series = pd.Series(data=[x.value for x in data],
+                           name='parameters', index=indexes)
+        series.loc['full point group'] = sym_line
+        series.loc['qm_program'] = 'gaussian'
+        if series.loc['natoms'] == 1:
+            series.loc['atom'] = True
+            series.loc['linear'] = True
+        else:
+            series.loc['atom'] = False
+            if series.loc['deg. of freedom'] == 1:
+                series.loc['linear'] = True
+            elif series.loc['natoms'] > 1 and series.loc['natoms']*3 - 5 == len(series.loc['freq.']):
+                series.loc['linear'] = True
+            else:
+                series.loc['linear'] = False
+        return series
+    else:
+        # TODO Доделать
+        _msg = ''
+        raise

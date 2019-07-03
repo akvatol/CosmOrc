@@ -1,6 +1,43 @@
-import cProfile
 import sys
 import time
+import cProfile
+
+from typing import List, Dict
+
+# simple cache
+# take and modify here https://habr.com/ru/post/147756/
+class SimpleCache:
+
+    __slots__ = ['__keys', '__keys2value', '__maxCount']
+
+    def __init__(self, maxCount: int = 10):
+        self.__maxCount = maxCount
+        self.__keys2value: Dict[object, object]= {}
+        self.__keys: List[object] = []
+
+    def __updateKeys(self, key):
+        if key in self.__keys:
+            pass
+        else:
+            if len(self.__keys) > self.__maxCount:
+                _key = self.__keys[0]
+                self.__keys2value.pop(_key)
+                self.__keys.remove(_key)
+            self.__keys.append(key)
+
+    def __getitem__(self, key):
+        return self.__keys2value.get(key)
+    
+    def __setitem__(self, key, value):
+        self.__keys2value[key] = value
+        self.__updateKeys(key)
+        
+    
+    def __repr__(self):
+        return str(self.__keys)
+    
+    def __str__(self):
+        return self.__repr__()
 
 
 def timeit(func):

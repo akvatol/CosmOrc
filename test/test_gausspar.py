@@ -46,14 +46,14 @@ class TestGauspar(unittest.TestCase):
             Setting.from_record('Temperature 298.150 Kelvin'),
             Setting.from_record('Pressure 1.00000 Atm')
         ],
-                        [
-                            Setting.from_record('Temperature 223 Kelvin'),
-                            Setting.from_record('Pressure 14.00000 bar')
-                        ],
-                        [
-                            Setting.from_record('Temperature 228 C'),
-                            Setting.from_record('Pressure 14.00000 bar')
-                        ]]
+            [
+            Setting.from_record('Temperature 223 Kelvin'),
+            Setting.from_record('Pressure 14.00000 bar')
+        ],
+            [
+            Setting.from_record('Temperature 228 C'),
+            Setting.from_record('Pressure 14.00000 bar')
+        ]]
 
         for i in range(len(tp_string_list)):
             self.assertRegex(tp_string_list[i],
@@ -123,7 +123,7 @@ class TestGauspar(unittest.TestCase):
         """
 
         parameters_list = [
-           'Zero-point correction= 0.003467',
+            'Zero-point correction= 0.003467',
             'Thermal correction to Energy= 0.011897',
             'Thermal correction to Enthalpy= 0.012841',
             'Thermal correction to Gibbs Free Energy= -0.033924',
@@ -133,8 +133,6 @@ class TestGauspar(unittest.TestCase):
             'Sum of electronic and thermal Free Energies= -3349.852191'
         ]
 
-        # yapf do it, not me, it does not look good for me,
-        # but i do not have time to fix it
 
         parameters_list_setting = [
             Setting(
