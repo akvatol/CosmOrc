@@ -1,61 +1,116 @@
+import logging
+from itertools import count
+from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
+
 import numpy as np
 import pandas as pd
 
-from typing import Callable, Iterable, Union, Optional, List
-
 import src.CosmOrc.parsers.gauspar as gauspar
 import src.CosmOrc.parsers.orpar as orpar
+from src.CosmOrc.parsers.cospar import Jobs
 
 R = 8.31441
 h = 6.626176e-34
 kB = 1.380662e-23  # J/K
 N0 = 6.022_140_85774e-23  # 1/mol
 
+PROGRAM_LIST = ('orca', 'gaussian')
 
-# TODO Навести в коде порядок и сделать проверку на None
+# code from https://docs.python.org/3/howto/logging-cookbook.html
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+# create file handler which logs even debug messages
+fh = logging.FileHandler('app.log', mode='w')
+fh.setLevel(logging.DEBUG)
+# create console handler with a higher log level
+ch = logging.StreamHandler()
+ch.setLevel(logging.ERROR)
+# create formatter and add it to the handlers
+formatter = logging.Formatter(
+    u'%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s'
+)
+ch.setFormatter(formatter)
+fh.setFormatter(formatter)
+# add the handlers to logger
+logger.addHandler(ch)
+logger.addHandler(fh)
+
+# logger.debug('debug message')
+# logger.info('info message')
+# logger.warning('warn message')
+# logger.error('error message')
+# logger.critical('critical message')
+
+
 class Compound:
 
-    __slots__ = ('qm_data', 'name', 'linear', 'E0', 'stat_sum', 'path_to_file',
-                 'sn', 'atom', 'qm_program', 'mass', 'vib_temp', 'freqs', 'ideal')
+    _ids = count(1)
+    # __slots__ = []
 
     def __init__(self,
+                 qm_program: str = 'gaussian',
+                 qm_data: pd.Series = None,
                  path_to_file: str = None,
+                 linear: bool = False,
+                 atom: bool = False,
                  name: str = None,
-                 qm_program: str = None,
-                 ideal: bool = None,
-                 linear: bool = None,
-                 atom: bool = None,
-                 sn: int = None):
+                 sn: int = 1):
 
-        self.name = name
-        self.path_to_file = path_to_file
-        self.sn = sn
-
+        # class instance counter
+        self.id = next(self._ids)
 
         self.qm_program = qm_program
 
-        if linear:
-            self.linear = 1.0
+        if name:
+            self.name = name
         else:
-            self.linear = 1.5
+            self.name = str(self.id)
 
-        self.ideal = ideal
+        if path_to_file:
+            self.file = path_to_file
+        else:
+            _msg = 'compound {} is missing a file'.format(self.name)
+            logger.error(_msg)
+            raise TypeError(
+                "__init__() missing 1 required positional argument: 'path_to_file'")
 
-        if self.qm_program == 'gaussian':
-            self.qm_data = gauspar.file_pars(path_to_file)
+        if linear:
+            self.linear_coefficient = 1.0
+        else:
+            self.linear_coefficient = 1.5
 
-        elif self.qm_program == 'orca':
-            self.qm_data = orpar.file_pars(path_to_file)
-
-        self.mass = self.qm_data['molecular mass']
         self.atom = atom
+        self.sn = sn
 
-        self.E0 = self.qm_data['scf energy']
-        # TODO Поправил для расчета атомов
-        # TODO Добавил частоты
-        if self.qm_data['deg. of freedom'] == 1:
+        try:
+            if self.qm_program.lower() == 'gaussian':
+                self.qm_data = gauspar.file_pars(self.file)
+            elif self.qm_program.lower() == 'orca':
+                self.qm_data = orpar.file_pars(self.file)
+            else:
+                _msg = f'Failed to load "{self.file}"'
+                logger.error(_msg)
+                print('This program does not supported in current version\n')
+                print(PROGRAM_LIST)
+                raise ValueError
+        except Exception as err:
+            _msg = '{} while parsing file {}'.format(repr(err), self.file)
+            logger.error(_msg)
+            raise err
+
+        if self.qm_data['natoms'] == 2:
+
+            if self.linear_coefficient == 1.5:
+                print(f'{self.name}:\n')
+                print(
+                    'Warning! The molecule consists of two atoms, but is marked as non-linear.\n')
+                _msg = f'{self.name} molecule marked as non-linear, but have only 2 atoms'
+                logger.warning(_msg)
+
+            # Если молекула 2х атомная, то в ней 1 частота
+            # Нужно чтобы вернуло не 1 значение, а список
             self.freqs = np.array([self.qm_data['freq.']])
-        elif self.qm_data['atom'] == True:
+        elif self.qm_data['atom']:
             self.freqs = np.array([0])
         else:
             self.freqs = self.qm_data['freq.']
@@ -68,28 +123,33 @@ class Compound:
             # Если нет частот, то не пытаемся пересчитать
             self.vib_temp = np.array([0])
 
-    def __repr__(self):
-        _representation = f"Compound(path_to_file='{self.path_to_file}', "\
-                          f"name='{self.name}', "\
-                          f"qm_program='{self.qm_program}', "\
-                          f"linear={self.linear}, "\
-                          f"atom={self.atom}, "\
-                          f"sn={self.sn})"
-        return _representation
-
-    def __str__(self):
-        return self.name
-
     @classmethod
     def from_dict(cls, some_dict: dict):
 
         return cls(
-            name=some_dict.get('name'),
+            qm_program=some_dict.get('qm_program', 'gaussian'),
             path_to_file=some_dict.get('path_to_file'),
-            qm_program=some_dict.get('qm_program'),
-            linear=some_dict.get('linear'),
-            sn=some_dict.get('sn'),
-            atom=some_dict.get('atom'))
+            linear=some_dict.get('linear', False),
+            atom=some_dict.get('atom', False),
+            name=some_dict.get('name'),
+            sn=some_dict.get('sn', 1))
+
+    @classmethod
+    def from_series(cls, series: pd.Series, name: str, sn: int = 1):
+        print('Проверьте правильность данных в таблице\n')
+        try:
+            return cls(
+                qm_program=series.loc['qm_program'],
+                linear=series.loc['linear'],
+                atom=series.loc['atom'],
+                qm_data=series,
+                name=name,
+                sn=sn)
+        except Exception as err:
+            # TODO
+            _msg = f'initialization error in {name}'
+            logger.error(_msg)
+            raise err
 
 
 def vib_temp_t(compound: Compound, temperature: np.array) -> np.array:
@@ -186,7 +246,7 @@ def enthalpy(compound: Compound, temperature: np.array,
     Ht = 1.5 * R * temperature
     rt = R * temperature
 
-    if compound.linear == 1:
+    if compound.linear_coefficient == 1:
         Hr = rt
     else:
         Hr = Ht
@@ -199,7 +259,7 @@ def enthalpy(compound: Compound, temperature: np.array,
         Hv = vibrational_enthalpy(
             compound=compound, temperature=temperature, pressure=pressure)
 
-    Htot = Ht + Hr + rt + compound.E0
+    Htot = Ht + Hr + rt + compound.qm_data['scf energy']
 
     df = pd.DataFrame(
         index=pressure, columns=temperature, data=[Htot] * len(pressure))
@@ -233,7 +293,7 @@ def translation_entropy(compound: Compound, temperature: np.array,
 
     Ts = []
     for p in pressure:
-        _ = (R * (1.5 * np.log(compound.mass) + 2.5 * np.log(temperature) -
+        _ = (R * (1.5 * np.log(compound.qm_data['molecular mass']) + 2.5 * np.log(temperature) -
                   np.log(p)) - 9.69)
         Ts.append(_)
 
@@ -266,13 +326,18 @@ def rotational_entropy(compound: Compound, temperature: np.array,
     # Sr = R*(ln(qr) + 1) for linear molecules
     # y = (exp(Sr0/R - x)/T0**x)
     # qr = y*T**x
+    if compound.qm_program == 'gaussian':
+        srot = compound.qm_data['rotational entropy']
+    elif compound.qm_program == 'orca':
+        srot = compound.qm_data[f'{compound.sn} s(rot)'] / \
+            compound.qm_data['temperature']
 
-    y = np.exp(compound.qm_data['rotational entropy'] / R - compound.linear
-               ) / compound.qm_data['temperature']**compound.linear
-    qr = y * temperature**compound.linear
+    y = np.exp(srot / R - compound.linear_coefficient
+               ) / compound.qm_data['temperature']**compound.linear_coefficient
+    qr = y * temperature**compound.linear_coefficient
     index = pressure
     columns = temperature
-    data = [R * (np.log(qr) + compound.linear)] * len(pressure)
+    data = [R * (np.log(qr) + compound.linear_coefficient)] * len(pressure)
 
     try:
         df = pd.DataFrame(
@@ -382,63 +447,103 @@ def gibbs_energy(compound: Compound, temperature: np.array,
             compound=compound, temperature=temperature, pressure=pressure)
 
 
-# %%
-# def main():
-#     path = '/media/antond/87B6-87D6/Scamt_Project/mn15l_def2tzvp/ion_pairs/'
-#     folder = '4-methylpyridin-1-ium'
-# 
-#     Br_dict = {'name': 'Br', 'atom': True,
-#                'path_to_file': '/home/antond/mn15l_def2tzvp/Anions/Br/Br.log'}
-#     BiBr6_dict = {'name': 'BiBr6',
-#                   'path_to_file': '/home/antond/mn15l_def2tzvp/Anions/BiBr6/BiBr6.log'}
-# 
-#     cation_dict={'path_to_file':'/home/antond/mn15l_def2tzvp/Cations/4-methylpyridin-1-ium/4-methylpyridin-1-ium.log'}
-#     # cation_dict={'path_to_file':'/home/antond/mn15l_def2tzvp/Cations/dimethylazanium/dimethylazanium.log'}
-# 
-#     c1_dict = {'path_to_file': path + folder + '/1/1.log'}
-#     c21_dict = {'path_to_file': path + folder + '/21/21.log'}
-#     c22_dict = {'path_to_file': path + folder + '/22/22.log'}
-#     c23_dict = {'path_to_file': path + folder + '/23/23.log'}
-#     c31_dict = {'path_to_file': path + folder + '/31/31.log'}
-#     c32_dict = {'path_to_file': path + folder + '/32/32.log'}
-#     c33_dict = {'path_to_file': path + folder + '/33/33.log'}
-# 
-#     Br = Compound.from_dict(Br_dict)
-#     BiBr6 = Compound.from_dict(BiBr6_dict)
-#     Cat = Compound.from_dict(cation_dict)
-# 
-#     c1 = Compound.from_dict(c1_dict)
-#     c21 = Compound.from_dict(c21_dict)
-#     c22 = Compound.from_dict(c22_dict)
-#     c23 = Compound.from_dict(c23_dict)
-#     c31 = Compound.from_dict(c31_dict)
-#     c32 = Compound.from_dict(c32_dict)
-#     c33 = Compound.from_dict(c33_dict)
-# 
-#     t = np.array([x for x in range(250, 360, 10)])
-#     p = np.array([1])
-# 
-#     Gc1 = gibbs_energy(compound=c1, temperature=t, pressure=p)
-#     Gc21 = gibbs_energy(compound=c21, temperature=t, pressure=p)
-#     Gc22 = gibbs_energy(compound=c22, temperature=t, pressure=p)
-#     Gc23 = gibbs_energy(compound=c23, temperature=t, pressure=p)
-#     Gc31 = gibbs_energy(compound=c31, temperature=t, pressure=p)
-#     Gc32 = gibbs_energy(compound=c32, temperature=t, pressure=p)
-#     Gc33 = gibbs_energy(compound=c33, temperature=t, pressure=p)
-# 
-#     Gcat = gibbs_energy(compound=Cat, temperature=t, pressure=p)
-#     GBiB6 = gibbs_energy(compound=BiBr6, temperature=t, pressure=p)
-#     GBr = gibbs_energy(compound=Br, temperature=t, pressure=p)
-# 
-#     df = Gc31 - Gc23 - Gcat
-# 
-#     df.to_csv(path_or_buf='14.csv', sep='\t')
+class Reaction:
+    _ids = count(1)
+    # __slots__ = []
+
+    def __init__(self,
+                 reaction: Tuple[Dict[str, Tuple[float, Compound]], ...],
+                 name: str = None):
+
+        self.id = next(self._ids)
+
+        if name:
+            self.name = name
+        else:
+            self.name = str(self.id)
+
+        self.reaction = reaction
+
+    @classmethod
+    def from_dict(cls, some_dict: Dict):
+        pass
 
 
-# if __name__ == '__main__':
-#     main()
+def str_pars(some_str: str):
+
+    if len(some_str.strip().split()) == 3:
+        step = float(some_str.strip().split()[2])
+        start = float(some_str.strip().split()[0])
+        stop = float(some_str.strip().split()[1]) + step
+    elif len(some_str.strip().split()) == 2:
+        step = 1
+        start = float(some_str.strip().split()[0])
+        stop = float(some_str.strip().split()[1]) + step
+    elif len(some_str.strip().split()) == 1:
+        step = 1
+        start = float(some_str.strip().split()[0])
+        stop = float(some_str.strip().split()[0])
+
+    return np.asarray(np.arange(start, stop, step), dtype='float64')
 
 
+def tp_pars(condition: Dict[str, str]) -> Tuple[np.array, np.array, ]:
+
+    _t = str_pars(condition.get('temperature', '298.15'))
+    _p = str_pars(condition.get('pressure', '1'))
+    return(_t, _p)
 
 
-#%%
+def gibbs_semi_reaction_gas(
+        semi_reaction: Dict[str, Tuple[float, Compound]],
+        condition: Tuple[np.array, ...]) -> pd.DataFrame:
+
+    temperature = condition[0]
+    pressure = condition[1]
+
+    g = 0
+
+    for compound in semi_reaction.keys():
+        g += semi_reaction[compound][0]*gibbs_energy(
+            compound=semi_reaction[compound][1],
+            temperature=temperature,
+            pressure=pressure)
+
+    return g
+
+
+def gibbs_energy_gas(
+        condition: Tuple[np.array, ...],
+        reaction_list: Tuple[Dict[str, Tuple[float, Compound]], ...]):
+
+    # Считаем dG реакции в вакуме
+
+    G_react = gibbs_semi_reaction_gas(
+        semi_reaction=reaction_list[0],
+        condition=condition)
+
+    G_prod = gibbs_semi_reaction_gas(
+        semi_reaction=reaction_list[1],
+        condition=condition)
+    return G_prod - G_react
+
+def ggas_generate_cosmo():
+    pass
+
+def main_calc(
+        condition: dict,
+        reaction: Reaction,
+        condition_cosmo: bool = False,
+        solubility_cosmo: bool = False):
+
+    if not condition_cosmo:
+        _condition = tp_pars(condition)
+        g = gibbs_energy_gas(
+            reaction_list=reaction.reaction,
+            condition=_condition)
+    elif condition_cosmo and solubility_cosmo:
+        pass
+    elif condition_cosmo:
+        pass
+
+    return g

@@ -9,7 +9,7 @@ import pandas as pd
 from typing import List, Set, Dict, Tuple, Any
 from typing import Callable, Iterable, Union, Optional, List
 
-from src.CosmOrc.basic.compound import Compound, gibbs_energy
+from src.CosmOrc.basic.compound import Compound, gibbs_energy, enthalpy
 from src.CosmOrc.parsers.cospar import Jobs
 from src.CosmOrc.basic._basic import timeit
 
@@ -132,7 +132,9 @@ class Reaction:
         return Ggas.T
 
     def _gibbs_energy_reagents_cosmo(
-        self, cosmo_settings: pd.DataFrame, compound: Compound
+        self,
+        cosmo_settings: pd.DataFrame,
+        compound: Compound,
     ):
 
         index = cosmo_settings.index
@@ -144,19 +146,23 @@ class Reaction:
         for job in index:
             # TODO: костыль , нужен т.к. иначе не работает с ошибкой TypeError: 'numpy.float64' object is not iterable
             # или TypeError: can't multiply sequence by non-int of type 'float'
-            temperature=np.array([cosmo_settings["T="].loc[job]])
-            pressure=np.array([cosmo_settings["p="].loc[job]])
-            GE = gibbs_energy(compound=compound, temperature=temperature, pressure=pressure)
+            temperature = np.array([cosmo_settings["T="].loc[job]])
+            pressure = np.array([cosmo_settings["p="].loc[job]])
+            GE = gibbs_energy(compound=compound,
+                              temperature=temperature, pressure=pressure)
             data.append(GE.iat[0, 0])
             logger.debug(f'T=:{temperature}, p={pressure}, value={GE}')
         df = pd.Series(index=index, data=data)
         return df
 
-    def gibbs_energy_cosmo(self, cosmo_file: str) -> pd.DataFrame:
+    def gibbs_energy_cosmo(
+            self,
+            cosmo_file: str):
 
         # Reading data from *.tab file
         cosmo_data = Jobs(path=cosmo_file)
-        cosmo_solv_data = cosmo_data.small_df(["Gsolv", "ln(gamma)", "Nr"], invert=True)
+        cosmo_solv_data = cosmo_data.small_df(
+            ["Gsolv", "ln(gamma)", "Nr"], invert=True)
         cosmo_setting = cosmo_data.settings_df()
 
         logger.info(f"Gibbs energy calc start tab file {cosmo_file}")
@@ -170,7 +176,8 @@ class Reaction:
             reagents_nr = cosmo_solv_data["Nr"].loc[reagents.name].values[0]
             # Умножаем на коэффициент, так как cospar
             # !!!! не переводит значение энергии в джоули !!!!!
-            G0 += reaction_coefficient * cosmo_solv_data["Gsolv"].loc[reagents.name] * 4184
+            G0 += reaction_coefficient * \
+                cosmo_solv_data["Gsolv"].loc[reagents.name] * 4184
             if reagents.ideal:
                 pass
             else:
@@ -178,7 +185,8 @@ class Reaction:
                     np.log(cosmo_setting.loc[str(reagents_nr)].T)
                     + cosmo_solv_data["ln(gamma)"].loc[reagents.name]
                 )
-                G0 += reaction_coefficient * activity * R * cosmo_setting.loc["T="].T
+                G0 += reaction_coefficient * activity * \
+                    R * cosmo_setting.loc["T="].T
 
             # Gas phase part
             G0 += reaction_coefficient * self._gibbs_energy_reagents_cosmo(
@@ -188,10 +196,12 @@ class Reaction:
         for products in self.reaction[1].keys():
 
             reaction_coefficient = self.reaction[1][products]
-            products_nr = str(cosmo_solv_data["Nr"].loc[products.name].values[0])
+            products_nr = str(
+                cosmo_solv_data["Nr"].loc[products.name].values[0])
             # Умножаем на коэффициент, так как cospar
             # !!!! не переводит значение энергии в джоули !!!!!
-            G1 += reaction_coefficient * cosmo_solv_data["Gsolv"].loc[products.name] * 4184
+            G1 += reaction_coefficient * \
+                cosmo_solv_data["Gsolv"].loc[products.name] * 4184
             if products.ideal:
                 pass
             else:
@@ -199,7 +209,8 @@ class Reaction:
                 ln_gamma = cosmo_solv_data["ln(gamma)"].loc[products.name]
                 activity = ln_x + ln_gamma
 
-                G1 += reaction_coefficient * activity * R * cosmo_setting.loc["T="].T
+                G1 += reaction_coefficient * activity * \
+                    R * cosmo_setting.loc["T="].T
             G1 += reaction_coefficient * self._gibbs_energy_reagents_cosmo(
                 compound=products, cosmo_settings=cosmo_setting.T
             )
@@ -207,10 +218,9 @@ class Reaction:
         return G1 - G0
 
     def gibbs_energy_reaction(
-        self,
-        conditions: Dict[str, List[Union[float, int]]] = DEFAULT_CONDITION,
-        cosmo_file: str = None,
-    ):
+            self,
+            conditions: Dict[str, List[Union[float, int]]] = DEFAULT_CONDITION,
+            cosmo_file: str = None) -> pd.DataFrame:
 
         if cosmo_file:
             Gtot = self.gibbs_energy_cosmo(cosmo_file)
@@ -218,6 +228,50 @@ class Reaction:
             Gtot = self._gibbs_energy(conditions=conditions)
 
         return Gtot
+
+    def energy_gas_compound(
+            self,
+            compound: Compound,
+            conditions: Dict[str, List[Union[float, int]]] = DEFAULT_CONDITION,
+            reaction_coefficient: int = 1,
+            function: Callable = gibbs_energy) -> pd.DataFrame:
+        """
+        Для каждой пары заданных температур и давлений cчитает энергию
+        (Энергию Гиббса или энтальпию) вещества в газе, может учитывать коэффициент реакции.
+
+        Parameters
+        ----------
+        compound : Compound
+            Вещество для которого рассчитываются термодинамические параметры
+
+        conditions : Dict[str, List[Union[float, int]]], optional
+            Условия (Температура и давление) для которых параметр
+            будет посчитан имеет вид: {'temperature':[200, 250], pressure:[1, 2]}, by default DEFAULT_CONDITION
+
+        reaction_coefficient : int, optional
+            Коэффициент на который умножиться финальное значение, by default 1
+
+        function : Callable, optional
+            Определяет какой параметр будет рассчитан (gibbs_energy, enthalpy), by default gibbs_energy
+
+        Return
+        ------
+        pandas.DataFrame
+            Таблицы со значениями заданного параметра
+        """
+
+        t = conditions.get('temperature')
+        p = conditions.get('pressure')
+
+        E = reaction_coefficient * function(
+            compound=compound,
+            temperature=t,
+            pressure=p,
+        )
+        return E
+
+    def energy_solv_compound(self): pass
+
 
 def main():
     Comp1 = Compound(
@@ -238,3 +292,27 @@ def main():
 
 if __name__ == "__main__":
     main()
+# code from https://docs.python.org/3/howto/logging-cookbook.html
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+# create file handler which logs even debug messages
+fh = logging.FileHandler('app.log', mode='w')
+fh.setLevel(logging.DEBUG)
+# create console handler with a higher log level
+ch = logging.StreamHandler()
+ch.setLevel(logging.ERROR)
+# create formatter and add it to the handlers
+formatter = logging.Formatter(
+    u'%(filename)s[LINE:%(lineno)d]# %(levelname)-8s [%(asctime)s]  %(message)s'
+)
+ch.setFormatter(formatter)
+fh.setFormatter(formatter)
+# add the handlers to logger
+logger.addHandler(ch)
+logger.addHandler(fh)
+
+# logger.debug('debug message')
+# logger.info('info message')
+# logger.warning('warn message')
+# logger.error('error message')
+# logger.critical('critical message')

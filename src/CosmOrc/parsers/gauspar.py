@@ -1,15 +1,15 @@
 import os
 import re
+from typing import Any, List, Tuple, Union
 
 import pandas as pd
 
-from typing import List, Tuple, Any, Union
-
 from src.CosmOrc.basic.setting import Setting
 
-EhToJ_Mol = 4.359744 * 6.022e5
 
-parameter_list = [
+EH_JMOL = 4.359744 * 6.022e5
+
+PARAMETER_LIST = [
     'Zero-point correction', 'Thermal correction to Energy',
     'Thermal correction to Enthalpy',
     'Thermal correction to Gibbs Free Energy',
@@ -19,26 +19,33 @@ parameter_list = [
     'Sum of electronic and thermal Free Energies'
 ]
 
-properties_list = [
+PROPERTIES_LIST = [
     'Total', 'Electronic', 'Translational', 'Rotational', 'Vibrational'
 ]
 
 
 # ^\s+(\d+)\s+\d+\s+\d+\s+\-?[\d.]+\s+\-?[\d.]+\s+\-?[\d.]+$ для атомов
 
-def list_unpack(some_list: List) -> Tuple:
-    """Функция для распаковки списков. Распаковывает вложенные
+def list_unpack(some_list: Union[List, Tuple]) -> List:
+    """
+    Функция для распаковки списков. Распаковывает вложенные
     списки на один уровень.
 
-    Arguments
-    ---------
-    some_list: list or tuple
-        Список содержащий вложенные списки
+    Parameters
+    ----------
+    some_list: list or Tuple
+        Список c уровнем вложенности равным n
 
     Return
     ------
-    new_list: tuple
-        Список, распакованный на один уровень
+    new_list: Tuple
+        Список,с уровнем вложенности n - 1; n - 1 >= 1
+
+    Example
+    -------
+    >>> some_list = [1, 2, [3, 4], [5, [6]]]
+    >>> list_unpack(some_list)
+    (1, 2, 3, 4, 5, [6])
     """
     new_list = []
     for element in some_list:
@@ -47,25 +54,30 @@ def list_unpack(some_list: List) -> Tuple:
                 new_list.append(i)
         else:
             new_list.append(element)
-    return tuple(new_list)
+    return new_list
 
 
-# TODO Убрать и протестировать сколько будет занимать по времени
-def read_data_gaussian(file_path: Union[str, bytes, int, 'os.PathLike[Any]']) -> Tuple:
-    # TODO Переделать с учетом того что file_path = None
-    """Функция для чтения данных из Gaussian. Проверяет есть ли
+def read_data_gaussian(file_path: Union[str, 'os.PathLike[Any]']) -> List:
+    """
+    Функция для чтения данных из Gaussian. Проверяет есть ли
     термохимические данные в файле, и считывает нужные строки
 
-    Arguments
+    Parameters
     ---------
-    file_path: str
+    file_path: str, 'os.PathLike[Any]'
         Путь к *.out файлу Gaussian
 
-    Return
+    Returns
     ------
-    matching: tuple
+    matching: Tuple
         Кортеж в который входят все строки содержащие в себе
-        элементы списков parameter_list или properties_list
+        элементы списков PARAMETER_LIST или PROPERTIES_LIST
+
+    Raises
+    ------
+    UnboundLocalError
+        Возникает при отсутствие "обязательных строк", строки содержат общую
+        информацию о структуре, поэтому их отсутствие является ошибкой
     """
     matching: List[str] = []
     scf_energy: str
@@ -73,9 +85,12 @@ def read_data_gaussian(file_path: Union[str, bytes, int, 'os.PathLike[Any]']) ->
         for line in data_file:
             if any(
                     xs in line for xs in (
-                        parameter_list + properties_list +
+                        PARAMETER_LIST + PROPERTIES_LIST +
                         ['Frequencies', 'Temperature', 'Molecular mass'])):
                 matching.append(line)
+            # Нужно только последнее значение для каждой из строк
+            # Эти строки должны встречаться в любом файле Gaussian
+            # Поэтому их отсутствие является ошибкой
             if 'SCF Done' in line:
                 scf_energy = line
             if 'NAtoms' in line:
@@ -84,27 +99,57 @@ def read_data_gaussian(file_path: Union[str, bytes, int, 'os.PathLike[Any]']) ->
                 sym_line = line
             if 'Deg. of freedom' in line:
                 free_line = line
+        try:
+            matching.append(free_line)
+            matching.append(sym_line)
+            matching.append(d_line)
+            matching.append(scf_energy)
+        except UnboundLocalError as err:
+            # logging.error(traceback.format_exc())
+            raise err
+        except Exception as err:
+            # logging.error('unexpected error while {file_path} reading')
+            # logging.error(traceback.format_exc())
+            raise err
+    return matching
 
-        matching.append(free_line)
-        matching.append(sym_line)
-        matching.append(d_line)
-        matching.append(scf_energy)
-    return tuple(matching)
 
+def scf_energy_pars(some_str: str):
+    """
+    Функция для извлечения электронной энергии
 
-def scf_energy_pars(some_str: str = None):
+    Parameters
+    ----------
+    some_str : str
+        Строка для парсинга
+
+    Returns
+    -------
+    Setting
+        Содержит название, значение и единицы измерения параметра
+    """
     _scf_energy = r'SCF\sDone:\s*E[\w\d()-]*\s*=\s*([-\d.]*)'
     _scf_energy_string = re.search(_scf_energy, some_str)
     if _scf_energy_string:
         return Setting(
             name='SCF Energy', value=_scf_energy_string.group(1),
             unit='Eh').convert(
-                koef=EhToJ_Mol, unit='J/mol')
+                koef=EH_JMOL, unit='J/mol')
 
 
-def molecular_mass_pars(some_str: str = None) -> Setting:
-    # TODO Написать документацию и переделать с учетом того что строка = None
-    """Парсер молекулярной массы
+def molecular_mass_pars(some_str: str) -> Setting:
+    """
+    Функция для извлечения молекулярной массы
+
+    Parameters
+    ----------
+    some_str : str
+        Строка для парсинга
+
+    Returns
+    -------
+    Setting
+        Содержит название, значение и единицы измерения параметра
     """
     _mol_mass = r'Molecular mass:\s*([0-9.]+)\s*([\w]+).'
     _mol_mass_string = re.search(_mol_mass, some_str)
@@ -116,13 +161,14 @@ def molecular_mass_pars(some_str: str = None) -> Setting:
 
 
 def tp_pars(some_str: str) -> List:
-    """Функция для парсинга температуры и давленя в *.out файле
+    """
+    Функция для парсинга температуры и давленя в *.out файле
 
-    Arguments
+    Parameters
     ---------
     some_str: str
 
-    Return
+    Returns
     ------
     Список содержащий два объекта класса Setting,
     Температура и давление соответственно
@@ -144,10 +190,10 @@ def tp_pars(some_str: str) -> List:
 
 
 def freq_pars(some_str: str) -> list:
-    # TODO Переделать с учетом того что str = None
-    """Функция для парсинга частот
+    """
+    Функция для парсинга частот
 
-    Arguments
+    Parameters
     ---------
     some_string: str
         Строка содержащая в себе значение частоты
@@ -161,8 +207,8 @@ def freq_pars(some_str: str) -> list:
     _name_ = r'(\w+)'
     _freq_value_ = r'([-\d.]+)'
     _reg_str = _name_ + r'\s\-\-\s*'
-    # _reg_str = _name_ + r'\s\-\-\s*' + _freq_value_ + r'\s*' + _freq_value_ + r'\s*' + _freq_value_
     # Когда в строке не 3 частоты
+    # Мы можем учесть это размером регулярного выражения
     for i in range(len(some_str.split()) - 2):
         _reg_str += _freq_value_ + r'\s*'
     freq_str = re.search(_reg_str, some_str)
@@ -173,13 +219,12 @@ def freq_pars(some_str: str) -> list:
     return _current_freq_
 
 
-def parameter_pars(some_str: str = None) -> Setting:
-    # TODO Переделать с учетом того что some_str = None
+def parameter_pars(some_str: str) -> Setting:
     """Функция для парсинга термодинамических параметров, должна
     принимать строки содержащие в себе один элемент из списка
-    parameter_list
+    PARAMETER_LIST
 
-    Arguments
+    Parameters
     ---------
     some_str: str
         Строка для парсинга
@@ -197,23 +242,22 @@ def parameter_pars(some_str: str = None) -> Setting:
     if param_str:
         return Setting(
             name=_name_[1:], value=param_str.group(1), unit='Eh').convert(
-                koef=EhToJ_Mol, unit='J/mol')
+                koef=EH_JMOL, unit='J/mol')
 
 
 def properties_pars(some_str: str) -> Setting:
-    # TODO Дописать документацию
-    """Функция для прасинга энтропии, принимает строку содержащую
-    одно из слов списка properties_list, возвращает объект класса Setting
-    в J/mol*K
+    """
+    Извлекает значение и название типа энтропии из строки
 
-    Arguments
-    ---------
-    some_str: str
+    Parameters
+    ----------
+    some_str : str
+        Строки типа: "Vibrational 120.478 27.641 25.420"
 
-
-    Return
-    ------
-
+    Returns
+    -------
+    Setting
+        Содержит название, значение в J/Mol*K, и единицы измерения
     """
     _name_ = some_str.split()[0]
     _value_ = r'([0-9]{1,10}\.[0-9]{3})'
@@ -229,8 +273,21 @@ def properties_pars(some_str: str) -> Setting:
 
 
 def file_pars(file_path: str) -> pd.Series:
-    # TODO Дописать документацию. Функция в целом нуждается в доработке
     """
+    Принимает на вход путь к файлу, и парсит его, возвращая результаты в виде
+    pandas.Series, если в файле не было данных или нужного файла не существует
+    вылетит с ошибкой.
+
+    Parameters
+    ----------
+    file_path : str
+        Путь к файлу *.out
+
+    Returns
+    -------
+    pd.Series
+        Серия содержит термохимические и структурные параметры,
+        необходимые для дальнейшего получения термодинамических данных
     """
     read_data = read_data_gaussian(file_path)
     _all_parameters = []
@@ -238,9 +295,9 @@ def file_pars(file_path: str) -> pd.Series:
         for line in read_data:
             if 'Frequencies' in line:
                 _all_parameters.append(freq_pars(line))
-            elif any(xs in line for xs in parameter_list):
+            elif any(xs in line for xs in PARAMETER_LIST):
                 _all_parameters.append(parameter_pars(line))
-            elif any(xs in line for xs in properties_list):
+            elif any(xs in line for xs in PROPERTIES_LIST):
                 _all_parameters.append(properties_pars(line))
             elif 'Temperature' in line:
                 _all_parameters.append(tp_pars(line))
@@ -281,7 +338,4 @@ def file_pars(file_path: str) -> pd.Series:
             else:
                 series.loc['linear'] = False
         return series
-    else:
-        # TODO Доделать
-        _msg = ''
-        raise
+    # TODO Fixme

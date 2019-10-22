@@ -55,7 +55,9 @@ class Setting:
 
     def __init__(self, name=None, value=None, unit=None, spec_name=None):
         self.spec_name = spec_name
-        self.name = str(name).lower().strip()
+        self.name = str(name).strip()
+        # не помню зачем это нужно
+        #self.name = str(name).lower().strip()
         try:
             self.value = float(value)
         except Exception as e:

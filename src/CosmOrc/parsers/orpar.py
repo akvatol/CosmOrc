@@ -4,18 +4,16 @@
 # __email__ = 'a.v.daomnin@gmail.com, yaroslavsolovev78@gmail.com'
 
 import re
+from typing import Any, List, Tuple, Union
 
 import pandas as pd
 
-from typing import List, Tuple, Any, Union
-
 from src.CosmOrc.basic.setting import Setting
 
+EH_JMOL = 4.359744 * 6.022e5
 
-EhToJ_Mol = 4.359744 * 6.022e5
 
-
-parameter_list = ('Electronic energy', 'Zero point energy',
+PARAMETER_LIST = ('Electronic energy', 'Zero point energy',
                   'Thermal vibrational correction',
                   'Thermal rotational correction',
                   'Thermal translational correction',
@@ -26,35 +24,45 @@ parameter_list = ('Electronic energy', 'Zero point energy',
 
 
 def read_data_orca(file_path: str = None):
-    """Функция считывает из файла строки, в которые входят элементы
-    из parameter_list, и добавляет их в список matching.
+    """
+    Функция считывает из файла строки, в которые входят элементы
+    из PARAMETER_LIST, и добавляет их в список matching.
     Возвращает список только в том случае, если слово
     'THERMOCHEMISTRY' есть в этом списке. Наличие 'THERMOCHEMISTRY'
     автоматически  гарантирует наличие термодинамических данных в файле
 
-    Arguments
+    Parameters
     ---------
     file_path: str
         Путь к файлу для парсинга
 
-    Return
+    Returns
     ------
     matching: list
         Список со строками, в которые входят строки из
-        списка parameter_list
+        списка PARAMETER_LIST
     """
+
     matching = []
     with open(file_path, "r") as data_file:
         for line in data_file:
-            if any(xs in line for xs in parameter_list):
+            if any(xs in line for xs in PARAMETER_LIST):
                 matching.append(line)
             if 'Number of atoms' in line:
                 atm_line = line
             if 'Number of degrees of freedom' in line:
                 deg_line = line
     if any('THERMOCHEMISTRY' in s for s in matching):
-        matching.append(atm_line)
-        matching.append(deg_line)
+        try:
+            matching.append(atm_line)
+            matching.append(deg_line)
+        except UnboundLocalError as err:
+            # logging.error(traceback.format_exc())
+            raise err
+        except Exception as err:
+            # logging.error('unexpected error while {file_path} reading')
+            # logging.error(traceback.format_exc())
+            raise err
         return matching
 
 
@@ -64,21 +72,21 @@ def tsrot_pars(some_string: str):
     принимает строку в которой параметры указаны в kcal/mol,
     а возвращает объект класса Setting переконвертировав в J/mol.
 
-    Arguments
+    Parameters
     ---------
     some_string: str
-        Строка содержащая в себе значение вращательной энтропии 
+        Строка содержащая в себе значение вращательной энтропии
 
-    Return
+    Returns
     ------
         Возвращает объект класса Setting, содержащий в себе
         значения TSrot в J/mol.
     """
     _sn_coef_ = r'sn=\s?([\d.]+)'
     _some_info_ = r'[\s]+qrot.sn=[\s]+[-\d.]+\s'
-    _TSrot_segment_ = r'T\*S\(rot\)=[\s]+'
+    _tsrot_segment_ = r'T\*S\(rot\)=[\s]+'
     _value_ = r'([-\d.]+)[\s]+kcal\/mol'
-    _reg = re.search(_sn_coef_ + _some_info_ + _TSrot_segment_ + _value_,
+    _reg = re.search(_sn_coef_ + _some_info_ + _tsrot_segment_ + _value_,
                      some_string)
     if _reg:
         _sn_coef = _reg.group(1)
@@ -92,13 +100,13 @@ def tsrot_pars(some_string: str):
 def tp_pars(some_string: str):
     """Функция для парсинга строк содержащих значения температуры и давления
 
-    Arguments
+    Parameters
     ---------
     some_string: str
         Строка содержащая в себе значение параметра
         (температура или давление)
 
-    Return
+    Returns
     ------
         Возвращает объект класса Setting, содержащий в себе
         значения параметра в J/mol.
@@ -120,12 +128,12 @@ def other_param_pars(some_string: str):
     """Функция предназначена для парсинга параметров, указанных в Eh,
     автоматически конвертирует их в J/mol
 
-    Arguments
+    Parameters
     ---------
     some_string: str
         Строка содержащая в себе значения вращательной энтропии
 
-    Return
+    Returns
     ------
         Возвращает объект класса Setting, содержащий в себе
         значения параметра в J/mol.
@@ -138,18 +146,18 @@ def other_param_pars(some_string: str):
     if _reg:
         return Setting(
             name=_reg.group(1), value=_reg.group(2), unit='Eh').convert(
-                koef=EhToJ_Mol, unit='J/mol')
+                koef=EH_JMOL, unit='J/mol')
 
 
 def freq_pars(some_str: str):
     """Функция для парсинга строк содержащих значения частот
 
-    Arguments
+    Parameters
     ---------
     some_string: str
         Строка содержащая в себе значение частоты
 
-    Return
+    Returns
     ------
         Возвращает объект класса Setting, содержащий в себе
         значения параметра в cm**-1.
@@ -204,7 +212,7 @@ def file_pars(file_path: str = None):
     а возвращает объект pd.Series, содержащий в себе все данные из
     указанного файла.
 
-    Arguments
+    Parameters
     ---------
     data: list or tuple
         Список, возвращаемый функцией read_data_orca
@@ -240,14 +248,14 @@ def file_pars(file_path: str = None):
     raw_data = [post_process(element)
                 for element in _all_parameters if element is not None]
 
-    # Because in orca entropy is T*S 
+    # Because in orca entropy is T*S
     for element in raw_data:
         if element and 'entropy' in element.name:
             element.convert(koef=_t.value**(-1))
         elif element and 't*s' in element.name:
             # change name and value from "x t*s(rot)" to "x s(rot)"
             new_name = element.name.split()[0] + ' s(rot)'
-            element.convert(koef=_t.value**(-1), name = new_name)
+            element.convert(koef=_t.value**(-1), name=new_name)
 
     data = [parameter for parameter in raw_data if parameter is not None]
 

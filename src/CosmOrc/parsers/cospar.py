@@ -1,6 +1,7 @@
 import re
 
 import pandas as pd
+import pysnooper
 
 from src.CosmOrc.basic.setting import Setting
 
@@ -78,7 +79,6 @@ def compound_nr(some_str: str):
     if _compound_nr_string:
         return _compound_nr_string.group(1)
 
-
 def setting_pars(settings_str: str):
     # TODO Документация job_indx
     """Функция для извлечения параметров расчета из строк,
@@ -116,7 +116,8 @@ def setting_pars(settings_str: str):
             new_setting.convert(name=compound_nr(new_setting.name), unit="%")
             settings_list.append(new_setting)
         elif len(setting.split()) > 3:
-            for element in chunkit(setting.split()):
+            # TODO: Проблемное место, пофиксить n в chunkit
+            for element in chunkit(setting.split(), n=len(setting.split())/2):
                 new_setting = Setting.from_record(element)
                 new_setting.convert(name=compound_nr(new_setting.name), unit="%")
                 settings_list.append(new_setting)
@@ -304,6 +305,7 @@ class Jobs:
         """
         """
         df = pd.concat([job.full_df() for job in self.data], sort=True)
+        df = df.applymap(lambda x: 0 if x == 'NA' else x)
         df = df.apply(pd.to_numeric)
         df.fillna(0, inplace=True)
         if invert:
@@ -346,3 +348,16 @@ class Jobs:
             df.fillna(0, inplace=True)
             return df
 
+def main():
+    from os import listdir
+    from os.path import isfile, join
+    mypath = '/home/anton/Documents/Scamt_projects/Adonin_project/COSMOthermProject/EA_scrf/'
+    onlyfiles = [f for f in listdir(mypath) if isfile(join(mypath, f))]
+    files = [i for i in onlyfiles if i.endswith('tab')]
+    for file in files:
+        Jobs(mypath + file).small_df(invert=1, columns=('Gsolv', 'ln(gamma)', 'Nr')).T.to_csv(f'{mypath + file}.csv')
+        Jobs(mypath + file).settings_df().T.to_csv(f'{mypath + file}_Settings.csv')
+
+
+if __name__ == "__main__":
+    main()
