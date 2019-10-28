@@ -3,7 +3,7 @@ import re
 import pandas as pd
 import pysnooper
 
-from utils.setting import Setting
+from CosmOrc.setting import Setting
 
 
 def chunkit(data: list or tuple = None, n: int = None):

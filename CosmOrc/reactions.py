@@ -4,9 +4,17 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-import utils.gauspar as gauspar
-import utils.orpar as orpar
-from utils.cospar import Jobs
+import CosmOrc.gauspar as gauspar
+import CosmOrc.orpar as orpar
+from CosmOrc.cospar import Jobs
+import pysnooper
+import cProfile
+
+from yaml import dump, load
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
 
 R = 8.31441
 h = 6.626176e-34
@@ -352,69 +360,122 @@ class Reaction:
 
         return g_prod - g_reag
 
+
 # Coming soon
-class Reaction_COSMO:
+class Reaction_COSMO(Reaction):
     def __init__(self,
                  reaction: str,
                  compounds: List[Compound],
-                 cosmo: list,
-                 condition: Dict[str, np.array] = None,
+                 cosmo: str,
                  name: str = None,
-                 ideal: list = None,
-                 gases: list = None,
-                 solids: list = None):
+                 ideal: list = None):
 
-        pass
+        self.settings = Jobs(cosmo).settings_df()
+        self.cdata = Jobs(cosmo).small_df(invert=1,
+                                          columns=('Gsolv', 'ln(gamma)', 'Nr'))
+        p = np.array([1])
+        t = self.settings.loc['T='].to_numpy()
+        self.condition = {'temperature': t, 'pressure': p}
+        super().__init__(reaction=reaction,
+                         compounds=compounds,
+                         name=name,
+                         condition=self.condition)
+
+        self.gas_reaction = self.g_reaction().T
+        if ideal:
+            self.ideal = ideal
+        else:
+            self.ideal = []
+
+    def _rtln_half_reaction(self,
+                            half_reaction: Dict[str, Tuple[float, Compound]]):
+        _ = []
+        for compound in half_reaction.keys():
+            # Reaction coefficient
+            comp_coef = half_reaction[compound][0]
+            # Compound number in tab file
+            comp_nr = self.cdata.loc[compound]['Nr'].iloc[0]
+            # Concentration, = 1 if compound not in setting table
+            if compound in self.ideal:
+                comp_x = 1
+            else:
+                comp_x = self.settings.loc[str(comp_nr)] if str(
+                    comp_nr) in self.settings.index.values.tolist() else 1
+                comp_x.replace(0, 1, inplace=True)
+            lnx = np.log(comp_x)
+            comp_rtln = self.settings.loc['T='] * R * lnx * self.cdata.loc[
+                compound]['ln(gamma)']
+            _.append(comp_coef * comp_rtln)
+
+        return sum(_)
+
+    def _gsolv_half_reaction(self,
+                             half_reaction: Dict[str, Tuple[float, Compound]]):
+        # !!! Cospar return original values from tab files, so i
+        # multiply Gsolv 4184 to turn it in J/mol !!!
+        return sum(
+            map(
+                lambda compound: half_reaction[compound][0] * self.cdata.loc[
+                    half_reaction[compound][1].name]['Gsolv'] * 4184,
+                half_reaction.keys())) + self._rtln_half_reaction(
+                    half_reaction=half_reaction)
+
+    def gtot(self):
+        reaction_dict = self.reaction_pars(reaction=self.reaction,
+                                           compounds=self.compounds)
+
+        g_prod = self._gsolv_half_reaction(half_reaction=reaction_dict[1])
+
+        g_reag = self._gsolv_half_reaction(half_reaction=reaction_dict[0])
+
+        self.gas_reaction.index = g_prod.index
+        self.gas_reaction = self.gas_reaction.squeeze()
+
+        return g_prod - g_reag + self.gas_reaction
+        # return g_prod - g_reag
+        # return self.gas_reaction
 
 
 #%%
+
+def profile(func):
+    """Decorator for run function profile"""
+
+    def wrapper(*args, **kwargs):
+        profile_filename = func.__name__ + '.prof'
+        profiler = cProfile.Profile()
+        result = profiler.runcall(func, *args, **kwargs)
+        profiler.dump_stats(profile_filename)
+        return result
+
+    return wrapper
+
+@profile
 def main():
-    Br = Compound.from_dict({
-        'name': 'Br',
-        'path_to_file':
-        '/media/antond/87B6-87D6/mn15l_def2tzvp/Anions/Br/Br.log',
-        'atom': True
-    })
-    BiBr6 = Compound.from_dict({
-        'name':
-        'BiBr6',
-        'path_to_file':
-        '/media/antond/87B6-87D6/mn15l_def2tzvp/Anions/BiBr6/BiBr6.log'
-    })
-    Bi2Br9 = Compound.from_dict({
-        'name':
-        'Bi2Br9',
-        'path_to_file':
-        '/media/antond/87B6-87D6/mn15l_def2tzvp/Anions/Bi2Br9/bi2br9.log'
-    })
-    Bi2Br10 = Compound.from_dict({
-        'name': 'Bi2Br10',
-        'path_to_file': ''
-    })
-    Bi3Br14z = Compound.from_dict({})
-    Bi3Br14str = Compound.from_dict({})
-    BiBr6D = Compound.from_dict({})
-    Bi2Br9D = Compound.from_dict({})
-    Bi2Br10D = Compound.from_dict({})
-    Bi3Br14zD = Compound.from_dict({})
-    Bi3Br14strD = Compound.from_dict({})
-    dimethylazanium = Compound.from_dict({})
-    cond = {
-        'temperature': np.array([i for i in range(250, 360, 10)]),
-        'pressure': np.array([1])
-    }
-    r = Reaction_COSMO(cosmo=None,
-                       reaction='2*BiBr6 = Bi2Br9 + 3*Br',
-                       condition=cond,
-                       compounds=[Br, BiBr6, Bi2Br9])
-    std = {'temperature': np.array([298.15]), 'pressure': np.array([1])}
 
-    # return Bi2Br9.gibbs_energy(temperature=np.array([298.15]), pressure=np.array([1])) - Bi2Br9.qm_data['sum of electronic and thermal free energies']
-    # return (r._g_half_reaction(half_reaction=r.reaction_dict[0], condition=std), 2*BiBr6.gibbs_energy(temperature=np.array([298.15]), pressure=np.array([1])))
-    # return (r._g_half_reaction(half_reaction=r.reaction_dict[1], condition=std), Bi2Br9.gibbs_energy(temperature=np.array([298.15]), pressure=np.array([1])) + 3*Br.gibbs_energy(temperature=np.array([298.15]), pressure=np.array([1])))
-    # return r.reaction_dict
+    path = '/home/anton/Documents/Scamt_projects/Pasha_Prject/temp/tempjob1.tab'
+    cdata = Jobs(path).small_df(invert=1, columns=('Gsolv', 'ln(gamma)', 'Nr'))
+    settings = Jobs(path).settings_df()
 
-    return r.g_reaction()
+    def condition_pars(cond_str):
+        c_l = [float(x) for x in cond_str.split()]
+        return np.arange(c_l[0], c_l[1] + c_l[2], c_l[2])
+
+    t = np.arange(200, 310, 10)
+    p = np.array([1])
+
+    file = '/home/anton/Documents/Scamt_projects/Pasha_Prject/PBE0_6-31+G3DF3PD/file123.yaml'
+    with open(file, 'r') as f:
+        data = load(f, Loader=Loader)
+
+    compounds = [Compound.from_dict(i) for i in data['Compounds']]
+
+    rx = Reaction_COSMO(name=data['Reactions'][0]['name'],
+                        compounds=compounds,
+                        reaction=data['Reactions'][0]['reaction'],
+                        cosmo=path)
+
+    return rx.gtot()
 
 
-#%%
+# %%

@@ -3,7 +3,7 @@ from typing import Any, List, Tuple, Union
 
 import pandas as pd
 
-from utils.setting import Setting
+from CosmOrc.setting import Setting
 
 EH_JMOL = 4.359744 * 6.022e5
 
@@ -178,7 +178,7 @@ def name_value_pars(some_str: str):
 
 def post_process(element: Setting):
 
-    if element.name == 'number of atoms':
+    if element.name == 'Number of atoms':
         element.convert(name='natoms')
     elif element.name == 'total':
         element.convert(name='molecular mass')
@@ -190,9 +190,9 @@ def post_process(element: Setting):
         element.convert(name='sum of electronic and thermal enthalpies')
     elif element.name == 'electronic energy':
         element.convert(name='scf energy')
-    elif 'thermochemistry at' in element.name:
+    elif 'THERMOCHEMISTRY AT' in element.name:
         element = None
-    elif element.name == 'number of degrees of freedom':
+    elif element.name == 'Number of degrees of freedom':
         element.convert('deg. of freedom')
     elif element.name == 'freq.' and element.value == 0:
         element = None

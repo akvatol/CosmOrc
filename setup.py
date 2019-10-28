@@ -3,9 +3,10 @@ from setuptools import setup, find_packages
 setup(
     name='CosmOrc',
     version='0.1',
+    include_package_data=True,
     packages=find_packages(),
+    python_requires='>=3.6',
     install_requires=[
-        'PySnooper==0.2.8',
         'pandas==0.24.2',
         'numpy==1.16.2',
         'Click==7.0',
@@ -13,6 +14,6 @@ setup(
     ],
     entry_points='''
         [console_scripts]
-        main=CosmOrc:cli
+        CosmOrc = main:cli
     ''',
 )

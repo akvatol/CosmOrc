@@ -4,7 +4,7 @@ from typing import Any, List, Tuple, Union
 
 import pandas as pd
 
-from utils.setting import Setting
+from CosmOrc.setting import Setting
 
 
 EH_JMOL = 4.359744 * 6.022e5
