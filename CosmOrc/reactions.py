@@ -7,8 +7,6 @@ import pandas as pd
 import CosmOrc.gauspar as gauspar
 import CosmOrc.orpar as orpar
 from CosmOrc.cospar import Jobs
-import pysnooper
-import cProfile
 
 from yaml import dump, load
 try:
@@ -401,7 +399,12 @@ class Reaction_COSMO(Reaction):
             else:
                 comp_x = self.settings.loc[str(comp_nr)] if str(
                     comp_nr) in self.settings.index.values.tolist() else 1
+
+            if not isinstance(comp_x, (int, float)):
                 comp_x.replace(0, 1, inplace=True)
+            else:
+                pass
+
             lnx = np.log(comp_x)
             comp_rtln = self.settings.loc['T='] * R * lnx * self.cdata.loc[
                 compound]['ln(gamma)']
@@ -432,50 +435,3 @@ class Reaction_COSMO(Reaction):
         self.gas_reaction = self.gas_reaction.squeeze()
 
         return g_prod - g_reag + self.gas_reaction
-        # return g_prod - g_reag
-        # return self.gas_reaction
-
-
-#%%
-
-def profile(func):
-    """Decorator for run function profile"""
-
-    def wrapper(*args, **kwargs):
-        profile_filename = func.__name__ + '.prof'
-        profiler = cProfile.Profile()
-        result = profiler.runcall(func, *args, **kwargs)
-        profiler.dump_stats(profile_filename)
-        return result
-
-    return wrapper
-
-@profile
-def main():
-
-    path = '/home/anton/Documents/Scamt_projects/Pasha_Prject/temp/tempjob1.tab'
-    cdata = Jobs(path).small_df(invert=1, columns=('Gsolv', 'ln(gamma)', 'Nr'))
-    settings = Jobs(path).settings_df()
-
-    def condition_pars(cond_str):
-        c_l = [float(x) for x in cond_str.split()]
-        return np.arange(c_l[0], c_l[1] + c_l[2], c_l[2])
-
-    t = np.arange(200, 310, 10)
-    p = np.array([1])
-
-    file = '/home/anton/Documents/Scamt_projects/Pasha_Prject/PBE0_6-31+G3DF3PD/file123.yaml'
-    with open(file, 'r') as f:
-        data = load(f, Loader=Loader)
-
-    compounds = [Compound.from_dict(i) for i in data['Compounds']]
-
-    rx = Reaction_COSMO(name=data['Reactions'][0]['name'],
-                        compounds=compounds,
-                        reaction=data['Reactions'][0]['reaction'],
-                        cosmo=path)
-
-    return rx.gtot()
-
-
-# %%

@@ -25,8 +25,8 @@ def condition_pars(cond_str):
 def cosmo_parsing(path, parameters=('Gsolv', 'ln(gamma)', 'Nr')):
     new_path = path.split('.')[0]
     data = Jobs(path).small_df(
-        invert=1, columns=parameters).to_csv(f'{new_path}_data.csv')
-    settings = Jobs(path).settings_df().to_csv(f'{new_path}_settings.csv')
+        invert=1, columns=parameters).to_csv(f'{new_path}_data.csv', header=True)
+    settings = Jobs(path).settings_df().to_csv(f'{new_path}_settings.csv', header=True)
 
 
 @click.group()
@@ -102,8 +102,8 @@ def parsing(files, iformat):
             try:
                 if iformat == 'gaussian' or iformat == 'orca':
                     data = parser(f)
-                    data.to_csv(path_or_buf=new_file_name + '.csv')
-                elif iformat == 'c':
+                    data.to_csv(path_or_buf=new_file_name + '.csv', header=True)
+                elif iformat == 'cosmo':
                     parser(f)
             except Exception as err:
                 click.secho(f'Some trouble in {f}', blink=True, bold=True)
@@ -128,13 +128,14 @@ def reaction(file):
                                      ntpath.basename(file).split('.')
                                      [0]) + f"_{rx['name']}" + '.csv'
             try:
-                if bar.get('cosmo', 0):
+                if rx.get('cosmo', 0):
 
                     _ = Reaction_COSMO(name=rx['name'],
+                                       compounds=compounds,
                                        reaction=rx['reaction'],
-                                       cosmo=bar['cosmo'],
-                                       ideal=bar.get('ideal', 0))
-                    _.gtot().to_csv(path_or_buf=file_name)
+                                       cosmo=rx['cosmo'],
+                                       ideal=rx.get('ideal', 0))
+                    _.gtot().to_csv(path_or_buf=file_name, header=True)
                 else:
                     p = condition_pars(rx['conditions']['pressure'])
                     t = condition_pars(rx['conditions']['temperature'])
@@ -148,7 +149,7 @@ def reaction(file):
                                      'pressure': p
                                  })
 
-                    _.g_reaction().to_csv(path_or_buf=file_name)
+                    _.g_reaction().to_csv(path_or_buf=file_name, header=True)
 
             except Exception as err:
                 print(f'trouble in {rx}')

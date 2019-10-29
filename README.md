@@ -4,6 +4,21 @@ Tools for automated screening of chemical space for screening and optimization o
 
 ## Requirements and Installation
 
+Requirements:
+
+```
+python>=3.6
+Click==7.0
+numpy==1.16.2
+pandas==0.24.2
+pyaml==19.4.1
+python-dateutil==2.8.0
+pytz==2019.3
+PyYAML==5.1.2
+six==1.12.0
+typing==3.7.4.1
+```
+
 Simplest way to install CosmOrc:
 
 ```bash
@@ -17,24 +32,43 @@ Simplest way to install CosmOrc:
 For pip, use:
 ```shell
     pip install -r requirements.txt
-    python3 setup.py install
+    pip install ../CosmOrc
 ```
+
+
 To remove a package use:
+
 ```shell
-    python3 setup.py --unistal
+    pip uninstall CosmOrc
 ```
 
-## Simple example
+Linux/Windows: Unfortunately, at the moment the package has not been tested for Windows usage.
 
-To provide some real life example: here is a simple CosmOrc usage examples:
+## Simple examples
+
+### Parsing
+
+Команда принимает на вход один параметр, отвечающий за выбор парсера и неограниченное число аргументов: файлов для парсинга. 
 
 ```bash
-	for i in *.log; do CosmOrc parsing $i -i g; done
+	CosmOrc parsing -i orca /path/to/folder/*.out 
 ```
 
-Give you thermochemistry data for all *.log files in folder in *.csv format.
+Данная команда аналогична использованию циклов в баше, like this:
 
-This is a simple example of input .yaml file. **Pay attention to the number of indents.**
+```bash
+	for f in *.log; do CosmOrc parsing $i -i orca; done
+```
+
+В случе исполнения для каждого *.out файла в дериктории будет создан файл *.csv с таким же именем, содержащий в себе основные термодинамические параметры молекулы.
+
+На данный момент доступно три опции -i: cosmo, orca, gaussian, в качестве дефолтной выбран gaussian. 
+
+**Обратите внимание** параметр cosmo, отвечает за парсинг *.tab файлов расчетов энергии сольватации программы cosmotherm. При использовании этой опции на каждый входной файл создается два файла *.csv. Содержащий непосредственно данные расчета сольватации **'Gsolv' - в Kcal/mol**, ln(gamma) и внутренний номер вещества в расчете CosmoTherm.
+
+### Reaction
+
+This is a simple example of input *.yaml file. **Pay attention to the number of indents.**
 
 ```yaml
 Compounds:
@@ -60,7 +94,9 @@ Reactions:
     temperature: 250 350 5
 ```
 
+Reaction_COSMO:
 
+#### Generator 
 
 ## Quantum chemistry algorithm explaining
 
@@ -156,23 +192,33 @@ https://pubs.acs.org/doi/pdf/10.1021/je025626e
 
 
 
-### CosmOrc Algorithm explaining 
+### CosmOrc Algorithm explaining
+
+Формула расчета G:
+$$
+G_{tot} = 
+\begin{cases}
+G_{gas} + G_{solv} + RTln(gamma)*ln(x) & \text{if x > 0} \\
+G_{gas} + G_{solv} & \text{if x = 0}
+\end{cases}
+$$
+Where x - compounds mole fraction in solution.
+
+
 
 На первом шагу необходимо сделать парсинг  *.out файлов и убедится в корректности полученных данных. Иногда парсер не верно определяет  линейность молекулы, линейность **трехатомных молекул не всегда работает корректно.**  
 
 - Оптимизация геометрии в квх программе
+
 - Расчет COSMOфайла в турбомоль
+
 - Расчет поправок COSMO-RS в CosmoTherm
+
 - Создание входного файла и расчет реакции 
 
-<img src="/home/anton/Documents/Scamt_projects/CosmOrc_public/image3_new.png" style="zoom:50%;" />
+  ....
 
-
-
-<center>
-    <img src="/home/anton/Documents/Scamt_projects/CosmOrc_public/image7.png" alt="image7" style="zoom: 33%;" />
-</center>
-<justify> CosmOrc software algorithm diagram, *.out files of quantum chemical programs (Gaussian, Orca, COSMOTherm), or *.yaml files can be used as input. This input is used to create CosmOrc Compound objects. These objects are used as a repository of thermodynamic data. They help to create Reaction objects and recalculate thermodynamic data. These objects can be represented as text files of the specified format (* .txt, * .csv) for further processing and visualization. </justify>
+CosmOrc software algorithm diagram, *.out files of quantum chemical programs (Gaussian, Orca, COSMOTherm), or *.yaml files can be used as input. This input is used to create CosmOrc Compound objects. These objects are used as a repository of thermodynamic data. They help to create Reaction objects and recalculate thermodynamic data. These objects can be represented as text files of the specified format (* .txt, * .csv) for further processing and visualization. 
 
 
 

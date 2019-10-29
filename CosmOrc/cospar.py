@@ -1,7 +1,6 @@
 import re
 
 import pandas as pd
-import pysnooper
 
 from CosmOrc.setting import Setting
 
