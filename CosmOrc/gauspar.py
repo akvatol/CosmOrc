@@ -6,7 +6,6 @@ import pandas as pd
 
 from CosmOrc.setting import Setting
 
-
 EH_JMOL = 4.359744 * 6.022e5
 
 PARAMETER_LIST = [
@@ -23,8 +22,8 @@ PROPERTIES_LIST = [
     'Total', 'Electronic', 'Translational', 'Rotational', 'Vibrational'
 ]
 
-
 # ^\s+(\d+)\s+\d+\s+\d+\s+\-?[\d.]+\s+\-?[\d.]+\s+\-?[\d.]+$ для атомов
+
 
 def list_unpack(some_list: Union[List, Tuple]) -> List:
     """
@@ -83,10 +82,9 @@ def read_data_gaussian(file_path: Union[str, 'os.PathLike[Any]']) -> List:
     scf_energy: str
     with open(file_path, 'r') as data_file:
         for line in data_file:
-            if any(
-                    xs in line for xs in (
-                        PARAMETER_LIST + PROPERTIES_LIST +
-                        ['Frequencies', 'Temperature', 'Molecular mass'])):
+            if any(xs in line for xs in (
+                    PARAMETER_LIST + PROPERTIES_LIST +
+                ['Frequencies', 'Temperature', 'Molecular mass'])):
                 matching.append(line)
             # Нужно только последнее значение для каждой из строк
             # Эти строки должны встречаться в любом файле Gaussian
@@ -128,10 +126,9 @@ def scf_energy_pars(some_str: str):
     _scf_energy = r'SCF\sDone:\s*E[\w\d()-]*\s*=\s*([-\d.]*)'
     _scf_energy_string = re.search(_scf_energy, some_str)
     if _scf_energy_string:
-        return Setting(
-            name='scf energy', value=_scf_energy_string.group(1),
-            unit='Eh').convert(
-                koef=EH_JMOL, unit='J/mol')
+        return Setting(name='scf energy',
+                       value=_scf_energy_string.group(1),
+                       unit='Eh').convert(koef=EH_JMOL, unit='J/mol')
 
 
 def molecular_mass_pars(some_str: str) -> Setting:
@@ -151,10 +148,9 @@ def molecular_mass_pars(some_str: str) -> Setting:
     _mol_mass = r'Molecular mass:\s*([0-9.]+)\s*([\w]+).'
     _mol_mass_string = re.search(_mol_mass, some_str)
     if _mol_mass_string:
-        return Setting(
-            name='Molecular mass',
-            value=_mol_mass_string.group(1),
-            unit=_mol_mass_string.group(2))
+        return Setting(name='Molecular mass',
+                       value=_mol_mass_string.group(1),
+                       unit=_mol_mass_string.group(2))
 
 
 def tp_pars(some_str: str) -> List:
@@ -175,14 +171,12 @@ def tp_pars(some_str: str) -> List:
     tp_string = re.search(_temperature + r'\s*' + _pressure, some_str)
     if tp_string:
         return [
-            Setting(
-                name=tp_string.group(1),
-                value=tp_string.group(2),
-                unit=tp_string.group(3)),
-            Setting(
-                name=tp_string.group(4),
-                value=tp_string.group(5),
-                unit=tp_string.group(6))
+            Setting(name=tp_string.group(1),
+                    value=tp_string.group(2),
+                    unit=tp_string.group(3)),
+            Setting(name=tp_string.group(4),
+                    value=tp_string.group(5),
+                    unit=tp_string.group(6))
         ]
 
 
@@ -237,9 +231,8 @@ def parameter_pars(some_str: str) -> Setting:
     # coef = 4.359744 * 6.022e5
     # hartree_to_j_coef / N_Avogadro
     if param_str:
-        return Setting(
-            name=_name_[1:], value=param_str.group(1), unit='Eh').convert(
-                koef=EH_JMOL, unit='J/mol')
+        return Setting(name=_name_[1:], value=param_str.group(1),
+                       unit='Eh').convert(koef=EH_JMOL, unit='J/mol')
 
 
 def properties_pars(some_str: str) -> Setting:
@@ -262,11 +255,9 @@ def properties_pars(some_str: str) -> Setting:
     entropy_str = re.search(
         _value_ + _whitespace_ + _value_ + _whitespace_ + _value_, some_str)
     if entropy_str:
-        return Setting(
-            name=_name_ + ' Entropy',
-            value=entropy_str.group(3),
-            unit='Cal/mol*K').convert(
-                koef=4.184, unit='J/mol*K')
+        return Setting(name=_name_ + ' Entropy',
+                       value=entropy_str.group(3),
+                       unit='Cal/mol*K').convert(koef=4.184, unit='J/mol*K')
 
 
 def file_pars(file_path: str) -> pd.Series:
@@ -308,10 +299,14 @@ def file_pars(file_path: str) -> pd.Series:
             elif 'Full point group' in line:
                 sym_line = line.split()[3]
                 _all_parameters.append(
-                    Setting(name=line.split()[4], value=line.split()[5], unit=''))
+                    Setting(name=line.split()[4],
+                            value=line.split()[5],
+                            unit=''))
             elif 'Deg. of freedom' in line:
                 _all_parameters.append(
-                    Setting(name='deg. of freedom', value=line.split()[3], unit=''))
+                    Setting(name='deg. of freedom',
+                            value=line.split()[3],
+                            unit=''))
             else:
                 pass
 
@@ -321,7 +316,8 @@ def file_pars(file_path: str) -> pd.Series:
     if data:
         indexes = [parameter.name for parameter in data]
         series = pd.Series(data=[x.value for x in data],
-                           name='parameters', index=indexes)
+                           name='parameters',
+                           index=indexes)
         series.loc['full point group'] = sym_line
         series.loc['qm_program'] = 'gaussian'
         if series.loc['natoms'] == 1:
@@ -331,7 +327,9 @@ def file_pars(file_path: str) -> pd.Series:
             series.loc['atom'] = False
             if series.loc['deg. of freedom'] == 1:
                 series.loc['linear'] = True
-            elif series.loc['natoms'] > 1 and series.loc['natoms']*3 - 5 == len(series.loc['freq.']):
+            elif series.loc[
+                    'natoms'] > 1 and series.loc['natoms'] * 3 - 5 == len(
+                        series.loc['freq.']):
                 series.loc['linear'] = True
             else:
                 series.loc['linear'] = False

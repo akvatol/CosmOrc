@@ -83,20 +83,26 @@ Compounds:
   linear: False
 Reactions:
 - name: dimerization
-  reaction: 2*A = A
+  reaction: 2*A = A2
   condition:
-    pressure: 1 2 0.1
+    pressure: 1 1 1
     temperature: 250 350 5
 - name: Trimerization
-  reaction: 2*A = A3
-  condition:
-    pressure: 1 2 0.1
-    temperature: 250 350 5
+  reaction: 3*A = A3
+  cosmo: /path/to/your.tab
 ```
 
-Reaction_COSMO:
+Вместо ключа condition, можно использовать ключ cosmo - путь к *.tab файлу. Обратите внимание, что парсер tab файлов не меняет единицы измерения $G_{solv}$, однако класс Reaction_COSMO считает что на вход подаются Kcal/mol, будтье осторожны на счет этого.
 
-#### Generator 
+#### Generator
+
+Для облегчение расчета реакций предусмотрена команда generator, она рекурсивно ищет аут файлы  указанной программы, и генерирует Compounds часть yaml файла, в качестве имени файла используется название файла. Обратите внимание при использовании опции cosmo имя вещества должно **полностью совпадать** с именем указанным в tab файле.
+
+```bash
+	CosmOrc generator -p gaussian -i .log /path/to/folder
+```
+
+
 
 ## Quantum chemistry algorithm explaining
 

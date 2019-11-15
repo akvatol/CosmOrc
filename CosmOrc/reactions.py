@@ -7,6 +7,7 @@ import pandas as pd
 import CosmOrc.gauspar as gauspar
 import CosmOrc.orpar as orpar
 from CosmOrc.cospar import Jobs
+import pysnooper
 
 from yaml import dump, load
 try:
@@ -431,7 +432,23 @@ class Reaction_COSMO(Reaction):
 
         g_reag = self._gsolv_half_reaction(half_reaction=reaction_dict[0])
 
+        rtln_prod = self._rtln_half_reaction(half_reaction=reaction_dict[1])
+        rtln_reag = self._rtln_half_reaction(half_reaction=reaction_dict[0])
+
         self.gas_reaction.index = g_prod.index
         self.gas_reaction = self.gas_reaction.squeeze()
 
-        return g_prod - g_reag + self.gas_reaction
+        rtln = rtln_prod - rtln_reag
+
+        gsolv = g_prod - g_reag
+
+        gtot = g_prod - g_reag + self.gas_reaction
+
+        df = pd.DataFrame(index=g_reag.index)
+
+        df['Gvacuum(J/Mol)'] = self.gas_reaction.values
+        df['RTln(gamma)ln(x)'] = rtln.values
+        df['Gsolv+RTln(gamma)ln(x)(J/mol)'] = gsolv.values
+        df['Gtotal(J/Mol)'] = gtot.values
+
+        return df

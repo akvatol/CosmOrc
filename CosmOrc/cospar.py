@@ -34,7 +34,7 @@ def chunkit(data: list or tuple = None, n: int = None):
     avg = len(data) / n
     last = 0
     while last < len(data):
-        new_data.append(data[int(last) : int(last + avg)])
+        new_data.append(data[int(last):int(last + avg)])
         last += avg
     return new_data
 
@@ -78,6 +78,7 @@ def compound_nr(some_str: str):
     if _compound_nr_string:
         return _compound_nr_string.group(1)
 
+
 def setting_pars(settings_str: str):
     # TODO Документация job_indx
     """Функция для извлечения параметров расчета из строк,
@@ -116,9 +117,11 @@ def setting_pars(settings_str: str):
             settings_list.append(new_setting)
         elif len(setting.split()) > 3:
             # TODO: Проблемное место, пофиксить n в chunkit
-            for element in chunkit(setting.split(), n=len(setting.split())/2):
+            for element in chunkit(setting.split(),
+                                   n=len(setting.split()) / 2):
                 new_setting = Setting.from_record(element)
-                new_setting.convert(name=compound_nr(new_setting.name), unit="%")
+                new_setting.convert(name=compound_nr(new_setting.name),
+                                    unit="%")
                 settings_list.append(new_setting)
     return int(job_indx), tuple(settings_list)
 
@@ -209,7 +212,8 @@ class Job:
 
     """
 
-    __slots__ = ("units", "settings", "compounds", "parameters", "columns", "job_indx")
+    __slots__ = ("units", "settings", "compounds", "parameters", "columns",
+                 "job_indx")
 
     def __init__(self, job: list or tuple):
         self.units = job[1]
@@ -232,11 +236,13 @@ class Job:
                 columns -- названия параметров,
                 data -- значения таблицы COSMOtherm
         """
-        index = list(zip([self.job_indx] * len(self.compounds), self.compounds))
-        multiindex = pd.MultiIndex.from_tuples(index, names=["Job", "Compound"])
-        return pd.DataFrame(
-            data=self.parameters, index=multiindex, columns=self.columns
-        )
+        index = list(zip([self.job_indx] * len(self.compounds),
+                         self.compounds))
+        multiindex = pd.MultiIndex.from_tuples(index,
+                                               names=["Job", "Compound"])
+        return pd.DataFrame(data=self.parameters,
+                            index=multiindex,
+                            columns=self.columns)
 
     def small_df(self, columns: list or tuple):
         """
@@ -337,19 +343,17 @@ class Jobs:
             [description]
         """
         if detailed:
-            df = pd.concat(
-                [job.settings_df(detailed=1) for job in self.data], axis=1, sort=True
-            )
+            df = pd.concat([job.settings_df(detailed=1) for job in self.data],
+                           axis=1,
+                           sort=True)
             df.fillna(0, inplace=True)
             return df
         else:
-            df = pd.concat([job.settings_df() for job in self.data], axis=1, sort=True)
+            df = pd.concat([job.settings_df() for job in self.data],
+                           axis=1,
+                           sort=True)
             df.fillna(0, inplace=True)
             return df
-
-
-
-
 
 
 def main():
@@ -359,8 +363,11 @@ def main():
     onlyfiles = [f for f in listdir(mypath) if isfile(join(mypath, f))]
     files = [i for i in onlyfiles if i.endswith('tab')]
     for file in files:
-        Jobs(mypath + file).small_df(invert=1, columns=('Gsolv', 'ln(gamma)', 'Nr')).T.to_csv(f'{mypath + file}.csv')
-        Jobs(mypath + file).settings_df().T.to_csv(f'{mypath + file}_Settings.csv')
+        Jobs(mypath + file).small_df(
+            invert=1, columns=('Gsolv', 'ln(gamma)',
+                               'Nr')).T.to_csv(f'{mypath + file}.csv')
+        Jobs(mypath +
+             file).settings_df().T.to_csv(f'{mypath + file}_Settings.csv')
 
 
 if __name__ == "__main__":
