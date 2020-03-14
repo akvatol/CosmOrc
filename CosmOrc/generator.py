@@ -6,10 +6,10 @@ class Generator:
     def __init__(self):
         pass
 
-def Yaml_Generator(Generator):
+class Yaml_Generator(Generator):
     def __init__(self):
         pass
 
-def Cosmo_Generator(Generator):
+class Cosmo_Generator(Generator):
     def __init__(self):
         pass

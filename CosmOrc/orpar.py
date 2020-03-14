@@ -178,23 +178,23 @@ def name_value_pars(some_str: str):
 
 def post_process(element: Setting):
 
-    if element.name == 'Number of atoms':
+    if element.name.lower() == 'number of atoms':
         element.convert(name='natoms')
-    elif element.name == 'total':
+    elif element.name.lower() == 'total':
         element.convert(name='molecular mass')
-    elif element.name == 'zero point energy':
+    elif element.name.lower() == 'zero point energy':
         element.convert(name='zero-point energy')
-    elif element.name == 'final gibbs free enthalpy':
+    elif element.name.lower() == 'final gibbs free enthalpy':
         element.convert('sum of electronic and thermal free energies')
-    elif element.name == 'total enthalpy':
+    elif element.name.lower() == 'total enthalpy':
         element.convert(name='sum of electronic and thermal enthalpies')
-    elif element.name == 'electronic energy':
+    elif element.name.lower() == 'electronic energy':
         element.convert(name='scf energy')
     elif 'THERMOCHEMISTRY AT' in element.name:
         element = None
-    elif element.name == 'Number of degrees of freedom':
+    elif element.name.lower() == 'number of degrees of freedom':
         element.convert('deg. of freedom')
-    elif element.name == 'freq.' and element.value == 0:
+    elif element.name.lower() == 'freq.' and element.value == 0:
         element = None
     else:
         pass

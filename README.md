@@ -204,7 +204,7 @@ https://pubs.acs.org/doi/pdf/10.1021/je025626e
 $$
 G_{tot} = 
 \begin{cases}
-G_{gas} + G_{solv} + RTln(gamma)*ln(x) & \text{if x > 0} \\
+G_{gas} + G_{solv} + RT(ln(gamma) + ln(x)) & \text{if x > 0} \\
 G_{gas} + G_{solv} & \text{if x = 0}
 \end{cases}
 $$
@@ -228,6 +228,9 @@ CosmOrc software algorithm diagram, *.out files of quantum chemical programs (Ga
 
 
 
+$$
+\Delta G_r = \sum^{products}\Delta G - \sum^{reactants}\Delta G
+$$
 
 
 

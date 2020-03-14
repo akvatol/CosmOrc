@@ -201,7 +201,7 @@ class Compound:
                 map(
                     lambda p:
                     (R *
-                     (1.5 * np.log(self.qm_data.get('Molecular mass')) + 2.5 *
+                     (1.5 * np.log(self.qm_data.get('molecular mass')) + 2.5 *
                       np.log(temperature) - np.log(p)) - 9.69), pressure)))
 
         df = pd.DataFrame(index=pressure, columns=temperature, data=Ts)
@@ -217,11 +217,13 @@ class Compound:
         # y = (exp(Sr0/R - x)/T0**x)
         # qr = y*T**x
 
-        if self.qm_program == 'gaussian':
-            srot = self.qm_data.get('Rotational Entropy')
-        elif self.qm_program == 'orca':
-            srot = self.qm_data[f'{self.sn} s(rot)'] / \
-                self.qm_data.get('Temperature', 298.15)
+        srot = self.qm_data.get('Rotational entropy')
+
+        # if self.qm_program == 'gaussian':
+        #     srot = self.qm_data.get('Rotational Entropy')
+        # elif self.qm_program == 'orca':
+        #     srot = self.qm_data[f'{self.sn} s(rot)'] / \
+        #         self.qm_data.get('Temperature', 298.15)
 
         y = np.exp(srot / R - self.linear_coefficient
                    ) / self.qm_data['Temperature']**self.linear_coefficient
@@ -277,7 +279,6 @@ class Compound:
             temperature=temperature,
             pressure=pressure) - temperature * self.total_entropy(
                 temperature=temperature, pressure=pressure)
-
 
 class Reaction:
     def __init__(self,
@@ -360,7 +361,6 @@ class Reaction:
         return g_prod - g_reag
 
 
-# Coming soon
 class Reaction_COSMO(Reaction):
     def __init__(self,
                  reaction: str,
@@ -407,8 +407,8 @@ class Reaction_COSMO(Reaction):
                 pass
 
             lnx = np.log(comp_x)
-            comp_rtln = self.settings.loc['T='] * R * lnx * self.cdata.loc[
-                compound]['ln(gamma)']
+            comp_rtln = self.settings.loc['T='] * R * (lnx + self.cdata.loc[
+                compound]['ln(gamma)'])
             _.append(comp_coef * comp_rtln)
 
         return sum(_)

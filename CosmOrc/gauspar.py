@@ -148,7 +148,7 @@ def molecular_mass_pars(some_str: str) -> Setting:
     _mol_mass = r'Molecular mass:\s*([0-9.]+)\s*([\w]+).'
     _mol_mass_string = re.search(_mol_mass, some_str)
     if _mol_mass_string:
-        return Setting(name='Molecular mass',
+        return Setting(name='molecular mass',
                        value=_mol_mass_string.group(1),
                        unit=_mol_mass_string.group(2))
 
@@ -255,7 +255,7 @@ def properties_pars(some_str: str) -> Setting:
     entropy_str = re.search(
         _value_ + _whitespace_ + _value_ + _whitespace_ + _value_, some_str)
     if entropy_str:
-        return Setting(name=_name_ + ' Entropy',
+        return Setting(name=_name_ + ' entropy',
                        value=entropy_str.group(3),
                        unit='Cal/mol*K').convert(koef=4.184, unit='J/mol*K')
 
