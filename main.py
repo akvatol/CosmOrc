@@ -10,6 +10,7 @@ import CosmOrc.gauspar as gauspar
 import CosmOrc.orpar as orpar
 from CosmOrc.cospar import Jobs
 from CosmOrc.reactions import Compound, Reaction, Reaction_COSMO
+from CosmOrc.generator import Cosmo_Generator
 
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
@@ -24,9 +25,10 @@ def condition_pars(cond_str):
 
 def cosmo_parsing(path, parameters=('Gsolv', 'ln(gamma)', 'Nr')):
     new_path = path.split('.')[0]
-    data = Jobs(path).small_df(
-        invert=1, columns=parameters).to_csv(f'{new_path}_data.csv', header=True)
-    settings = Jobs(path).settings_df().to_csv(f'{new_path}_settings.csv', header=True)
+    data = Jobs(path).small_df(invert=1, columns=parameters).to_csv(
+        f'{new_path}_data.csv', header=True)
+    settings = Jobs(path).settings_df().to_csv(f'{new_path}_settings.csv',
+                                               header=True)
 
 
 @click.group()
@@ -35,7 +37,7 @@ def cli1():
 
 
 #TODO Comments
-@cli1.command('generator')
+@cli1.command('yaml_generator')
 @click.option('-p',
               '--program',
               type=click.Choice(['gaussian', 'orca'], case_sensitive=False),
@@ -73,6 +75,34 @@ def yaml_generator(path, program, iformat):
         dump(data, outfile, Dumper=Dumper)
 
 
+@cli1.command('cosmo_generator')
+@click.option('-t',
+              '--temperature',
+              default='298.15',
+              prompt='Enter temperature')
+@click.option('-n',
+              default='0.01',
+              show_default=True,
+              prompt='Please, specify n parameter')
+@click.option('-f',
+              '--file_name',
+              prompt='Please, specify file name')
+@click.argument('template', nargs=1, type=click.Path())
+def cosmo_generator(template, temperature, n, file_name):
+    generator = Cosmo_Generator(template)
+
+    for i, j, k in zip(list(range(len(generator.template_process()[1]))), generator.template_process()[2], generator.template_process()[1]):
+        print(str(i) + ' ' + str(j) + ' ' + k)
+    reaction = click.prompt(
+        "Please, specify reaction like '0=1 3=-1' this means that the concentration of the substance is 0 on n, and 3 on-n",
+        type=str)
+    try:
+        generator.file_generator(reaction, n=n, new_file=file_name, t=temperature)
+    except Exception as err:
+        print('Ooops, something goes wrong')
+        print(err)
+
+
 # TODO Fix Natoms bug Orpar and Gauspar
 #
 @cli1.command('parsing')
@@ -102,7 +132,8 @@ def parsing(files, iformat):
             try:
                 if iformat == 'gaussian' or iformat == 'orca':
                     data = parser(f)
-                    data.to_csv(path_or_buf=new_file_name + '.csv', header=True)
+                    data.to_csv(path_or_buf=new_file_name + '.csv',
+                                header=True)
                 elif iformat == 'cosmo':
                     parser(f)
             except Exception as err:
