@@ -32,7 +32,7 @@ Simplest way to install CosmOrc:
 For pip, use:
 ```shell
     pip install -r requirements.txt
-    pip install ../CosmOrc
+    pip install -e ../CosmOrc
 ```
 
 
