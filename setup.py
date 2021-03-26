@@ -14,7 +14,7 @@ setup(
         'PySnooper==0.2.8',
         'python-dateutil==2.8.0',
         'pytz==2019.3',
-        'PyYAML==5.1.2',
+        'PyYAML==5.4',
         'six==1.12.0',
         'typing==3.7.4.1',
     ],
