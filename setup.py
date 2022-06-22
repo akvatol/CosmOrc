@@ -8,7 +8,7 @@ setup(
     python_requires='>=3.6',
     install_requires=[
         'Click==7.0',
-        'numpy==1.16.2',
+        'numpy==1.22.0',
         'pandas==0.24.2',
         'pyaml==19.4.1',
         'PySnooper==0.2.8',
